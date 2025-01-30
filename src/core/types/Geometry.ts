@@ -215,7 +215,7 @@ export const SizeUtils = {
         const pixelContainer = this.convert(container, 'px', context);
 
         return pixelSize.width.value <= pixelContainer.width.value &&
-               pixelSize.height.value <= pixelContainer.height.value;
+            pixelSize.height.value <= pixelContainer.height.value;
     },
 
     /**

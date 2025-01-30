@@ -116,7 +116,7 @@ export const MeasurementUtils = {
         const sourceDefinition = this.getUnitDefinition(measurement.unit);
         const targetDefinition = this.getUnitDefinition(targetUnit);
 
-        if(sourceDefinition.category !== targetDefinition.category) {
+        if (sourceDefinition.category !== targetDefinition.category) {
             throw new Error(
                 `Cannot convert from ${measurement.unit} to ${targetUnit}: ` +
                 `incompatible unit categories`

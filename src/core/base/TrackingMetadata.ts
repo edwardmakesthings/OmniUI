@@ -1,5 +1,3 @@
-import { nanoid } from 'nanoid';
-
 /**
  * Metadata for tracking changes to definitions and instances
  * Uses Date objects internally for better type safety and manipulation
