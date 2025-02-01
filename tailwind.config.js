@@ -1,6 +1,22 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}"
+  ],
+  safelist: [
+    'bg-background-light',
+    'text-secondary',
+    'border-secondary-light',
+    'border-r',
+    'border-l',
+    'border-t',
+    'w-full',
+    'h-full',
+    'bg-secondary',
+    'bg-primary-light',
+    'text-red-500',
+  ],
   theme: {
     extend: {
       colors: {
@@ -15,7 +31,8 @@ export default {
           dark: "#2A3B38",
         },
         background: {
-          light: "#FFFFFF",
+          DEFAULT: "#333333",
+          light: "#FAFAFA",
           dark: "#1A1A1A",
         },
       },
