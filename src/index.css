@@ -5,8 +5,22 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
 
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@theme {
+  --font-sans: "Nunito Sans", system-ui, Avenir, Helvetica, Arial, sans-serif;
+
+  --color-bg-dark: #242424;
+  --color-font-dark: #f9f9f9;
+  --color-accent-dark-neutral: #333;
+  --color-accent-dark-bright: #fab323;
+
+  --color-bg-light: #f9f9f9;
+  --color-font-light: #242424;
+  --color-accent-light-neutral: #ccc;
+  --color-accent-light-bright: #fab323;
+
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
 }

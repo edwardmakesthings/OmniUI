@@ -4,8 +4,9 @@ import { createEntityId, EntityId } from '../core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '../core/base/StoreError';
 import { MeasurementUtils } from '../core/types/Measurement';
 import { persist } from 'zustand/middleware';
+import { ComponentsIcon, ConnectionsIcon, LayoutIcon, PropertyEditorIcon, ThemeIcon, WidgetsIcon } from '@/components/ui/icons';
 
-
+// Default grid settings
 const DEFAULT_GRID_SETTINGS = {
     showGrid: true,
     snapToGrid: true,
@@ -14,12 +15,39 @@ const DEFAULT_GRID_SETTINGS = {
 
 // Standard panel IDs
 export const PANEL_IDS = {
-    COMPONENT_PALETTE: createEntityId('component-palette'),
     PROPERTY_EDITOR: createEntityId('property-editor'),
-    LAYOUT_HIERARCHY: createEntityId('layout-hierarchy')
+    COMPONENT_PALETTE: createEntityId('component-palette'),
+    LAYOUT_HIERARCHY: createEntityId('layout-hierarchy'),
+    WIDGET_DEFINITIONS: createEntityId('widget-definitions'),
+    CONNECTIONS: createEntityId('connections'),
+    THEME_MANAGER: createEntityId('theme-manager'),
 } as const;
 
 export type PanelName = keyof typeof PANEL_IDS;
+
+// Icon mapping
+export const PANEL_ICONS: Record<PanelName, React.ComponentType> = {
+    PROPERTY_EDITOR: PropertyEditorIcon,
+    COMPONENT_PALETTE: ComponentsIcon,
+    LAYOUT_HIERARCHY: LayoutIcon,
+    WIDGET_DEFINITIONS: WidgetsIcon,
+    CONNECTIONS: ConnectionsIcon,
+    THEME_MANAGER: ThemeIcon,
+};
+
+export type PanelIconName = keyof typeof PANEL_ICONS;
+
+// Tooltip mapping
+export const PANEL_TOOLTIPS: Record<PanelName, string> = {
+    PROPERTY_EDITOR: 'Property Editor',
+    COMPONENT_PALETTE: 'Add Components',
+    LAYOUT_HIERARCHY: 'Layout Hierarchy',
+    WIDGET_DEFINITIONS: 'Widget Definitions',
+    CONNECTIONS: 'Connections',
+    THEME_MANAGER: 'Theme Manager',
+};
+
+export type PanelTooltipName = keyof typeof PANEL_TOOLTIPS;
 
 // Default panel configurations
 const DEFAULT_PANEL_CONFIGS = {
@@ -36,9 +64,15 @@ const DEFAULT_PANEL_CONFIGS = {
         isVisible: true
     },
     [PANEL_IDS.LAYOUT_HIERARCHY]: {
+        position: PanelPositionValues.Left,
+        isFloating: false,
+        size: MeasurementUtils.create(320, 'px'),
+        isVisible: false
+    },
+    [PANEL_IDS.THEME_MANAGER]: {
         position: PanelPositionValues.Bottom,
         isFloating: false,
-        size: MeasurementUtils.create(240, 'px'),
+        size: MeasurementUtils.create(320, 'px'),
         isVisible: false
     }
 };
@@ -177,6 +211,7 @@ export function usePanelConfig(panelName: PanelName) {
 
     return {
         ...panelConfig,
+        panelName: panelName,
         id: panelId
     };
 }
