@@ -1,24 +1,23 @@
-import React from 'react';
-import { usePanelConfig } from '../../../store/uiStore';
-import { Panel } from '../Panel';
+import { ComponentPanel, PropertyEditorPanel, ThemePanel } from '../panels';
+import { usePanelVisibility } from '../../../store/uiStore';
+import { IconColumn } from '../elements/IconColumn';
+import { Grid } from '../elements/Grid';
 
 /**
  * Main application shell that manages the layout and positioning of panels
  * @component
  */
 const WebAppShell: React.FC = () => {
-    const componentPaletteConfig = usePanelConfig('COMPONENT_PALETTE');
-    const propertyEditorConfig = usePanelConfig('PROPERTY_EDITOR');
-    const layoutHierarchyConfig = usePanelConfig('LAYOUT_HIERARCHY');
+    const { isVisible: themePanelVisible } = usePanelVisibility('THEME_MANAGER')
 
     return (
-        <div className="w-full h-screen bg-zinc-700 flex flex-col">
+        <div className="w-full h-screen bg-zinc-700 text-white flex flex-col">
             <div className="flex-1 flex">
                 {/* Left Panel Group */}
-                <div className="flex flex-col">
-                    <Panel {...componentPaletteConfig}>
-                        Component Palette
-                    </Panel>
+                <div className="flex flex-row">
+                    {/* <IconColumn /> */}
+                    <IconColumn />
+                    <ComponentPanel />
                 </div>
 
                 {/* Main Canvas Area */}
@@ -28,18 +27,17 @@ const WebAppShell: React.FC = () => {
 
                 {/* Right Panel Group */}
                 <div className="flex flex-col">
-                    <Panel {...propertyEditorConfig}>
-                        Property Editor
-                    </Panel>
+                    <PropertyEditorPanel />
                 </div>
             </div>
 
             {/* Bottom Panel */}
-            {layoutHierarchyConfig.isVisible && (
-                <Panel {...layoutHierarchyConfig}>
-                    Layout Hierarchy
-                </Panel>
+            {themePanelVisible && (
+                <ThemePanel />
             )}
+            <Grid mode="overlay" />
+            <Grid mode="overlay" cellSize={10} />
+            <Grid mode="overlay" cellSize={40} />
         </div>
     );
 };

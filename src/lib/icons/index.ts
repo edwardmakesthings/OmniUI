@@ -1,0 +1,1 @@
+export { createIconComponent } from './types';

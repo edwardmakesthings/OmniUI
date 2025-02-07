@@ -14,6 +14,16 @@ export const PanelPositionValues = {
 export type PanelPosition = typeof PanelPositionValues[keyof typeof PanelPositionValues];
 
 /**
+ * Checks if a given string value corresponds to a valid PanelPosition.
+ *
+ * @param {string} value - The string value to check.
+ * @returns {boolean} - Returns true if the value is a valid PanelPosition, otherwise false.
+ */
+export function isPanelPosition(value: string): value is PanelPosition {
+    return Object.values(PanelPositionValues).includes(value as PanelPosition);
+}
+
+/**
  * Defines the panel configuration in the UI store
  * The component uses PanelProps which extends this interface
  */

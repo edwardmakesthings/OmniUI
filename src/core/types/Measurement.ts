@@ -9,6 +9,15 @@ const UnitCategoryValues = {
 export type UnitCategory = typeof UnitCategoryValues[keyof typeof UnitCategoryValues];
 
 /**
+ * Checks if a given string is a valid unit category
+ * @param value - the value to check
+ * @returns true if the value is a valid unit category, false otherwise
+ */
+export function isUnitCategory(value: string): value is UnitCategory {
+    return Object.values(UnitCategoryValues).includes(value as UnitCategory);
+}
+
+/**
  * Definition of a unit type with its category and conversion info
  */
 interface UnitDefinition {

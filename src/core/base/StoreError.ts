@@ -5,7 +5,6 @@ export class StoreError extends Error {
     }
 }
 
-// Common error codes
 export const StoreErrorCodes = {
     // Component Store
     INVALID_DEFINITION: 'INVALID_DEFINITION',
@@ -20,3 +19,13 @@ export const StoreErrorCodes = {
 } as const;
 
 export type StoreErrorCode = typeof StoreErrorCodes[keyof typeof StoreErrorCodes];
+
+/**
+ * Checks if a given string value is a valid StoreErrorCode.
+ *
+ * @param {string} value - The string value to check.
+ * @returns {boolean} - Returns true if the value is a valid StoreErrorCode, otherwise false.
+ */
+export function isStoreErrorCode(value: string): value is StoreErrorCode {
+    return Object.values(StoreErrorCodes).includes(value as StoreErrorCode);
+}
