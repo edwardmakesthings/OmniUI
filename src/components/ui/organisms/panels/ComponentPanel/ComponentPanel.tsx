@@ -1,6 +1,6 @@
 import { BasePanel } from "../BasePanel";
-import { usePanelConfig } from "../../../../store/uiStore"
-import { ProjectHeader } from "../../elements/ProjectHeader";
+import { usePanelConfig } from "@/store/uiStore"
+import { ProjectHeader } from "@/components/ui/atoms/ProjectHeader";
 
 const ComponentPanel = () => {
     const componentPaletteConfig = usePanelConfig('COMPONENT_PALETTE');

@@ -1,4 +1,3 @@
-// src/components/atoms/Grid/Grid.tsx
 import { type CSSProperties, memo } from 'react';
 
 export type GridMode = 'overlay' | 'contained';

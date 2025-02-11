@@ -1,5 +1,5 @@
 import { BasePanel } from "../BasePanel";
-import { usePanelConfig } from "../../../../store/uiStore"
+import { usePanelConfig } from "@/store/uiStore"
 
 const ThemePanel = () => {
     const themeManagerConfig = usePanelConfig('THEME_MANAGER');

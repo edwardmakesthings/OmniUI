@@ -1,7 +1,7 @@
-import { PanelConfig, PanelPositionValues } from '../../../../core/types/UI';
-import { SizeUtils } from '../../../../core/types/Geometry';
-import { MeasurementUtils } from '../../../../core/types/Measurement';
-import { PanelName, usePanelConfig } from '../../../../store/uiStore';
+import { PanelConfig, PanelPositionValues } from '@/core/types/UI';
+import { SizeUtils } from '@/core/types/Geometry';
+import { MeasurementUtils } from '@/core/types/Measurement';
+import { PanelName, usePanelConfig } from '@/store/uiStore';
 
 interface BasePanelProps extends PanelConfig {
     /** Panel identifier matching PANEL_IDS in uiStore */

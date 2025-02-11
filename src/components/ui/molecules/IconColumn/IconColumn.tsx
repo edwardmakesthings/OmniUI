@@ -1,5 +1,5 @@
 import { PANEL_ICONS, PANEL_IDS, PANEL_TOOLTIPS, PanelName, usePanelVisibility } from '@/store/uiStore';
-import { IconButton, IconButtonProps } from '../IconButton';
+import { IconButton, IconButtonProps } from '../../atoms/IconButton';
 import { EntityId } from '@/core/types/EntityTypes';
 import { GearIcon, LogoIcon } from '../../icons';
 import { cn } from '@/lib/utils';
@@ -12,16 +12,11 @@ const ICON_COLUMN_PANELS: EntityId[] = [
 
 // Base configuration for all icon buttons in the column
 const baseIconButtonProps: Partial<IconButtonProps> = {
-    size: 28,
-    containerSize: 40,
-    shape: 'square',
-    padding: 'none',
-    variant: 'minimal',
+    iconSize: 28,
+    containerSize: "md",
+    variant: 'default',
     iconProps: { strokeWidth: 1.4 },
-    className: 'aspect-square',
-    styleProps: {
-        showFocusRing: false,
-    }
+    // className: 'aspect-square'
 } as const;
 
 // Specific configurations for different button types
@@ -55,7 +50,7 @@ const buttonConfigs = {
 
 const IconColumn = () => {
     return (
-        <div className="h-full w-10 bg-bg-dark flex flex-col border-r border-accent-dark-bright">
+        <div className="h-full bg-bg-dark flex flex-col border-r border-accent-dark-bright">
             {/* Logo Button */}
             <IconButton {...buttonConfigs.logo} />
 

@@ -1,3 +1,4 @@
-export * from './panels';
-export * from './elements';
-export * from './shared';
+export * from './icons';
+export * from './atoms';
+export * from './molecules';
+export * from './organisms';
