@@ -28,6 +28,8 @@ export interface InteractiveBaseState {
     isPressed: boolean;
     isActive: boolean;
     isDisabled: boolean;
+    isSelected: boolean;
+    isEditing: boolean;
 }
 
 export interface Bindings {
@@ -42,17 +44,17 @@ export interface RenderElementProps {
     computedStyle: Record<string, string>;
 }
 
-export interface BaseInteractiveProps {
+export interface BaseInteractiveProps<T extends string = string> {
     /** Element HTML type */
     as: ElementType;
     /** Element's content */
     children?: ReactNode;
     /** Styled elements configuration */
-    styleElements?: string[];
+    styleElements?: T[];
     /** Style props for customization */
-    styleProps?: StyleProps<string>;
+    styleProps?: StyleProps<T>;
     /** Preset style configuration */
-    stylePreset?: StylePreset;
+    stylePreset?: StylePreset<T>;
     /** Optional theme for token-based styling */
     theme?: Theme;
     /** Optional component ID for widget mode */
@@ -70,25 +72,25 @@ export interface BaseInteractiveProps {
 }
 
 // Element-specific props
-interface ButtonProps extends BaseInteractiveProps, Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style'> {
+export interface ButtonProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style'> {
     as: 'button';
 }
 
-interface InputProps extends BaseInteractiveProps, Omit<InputHTMLAttributes<HTMLInputElement>, 'style'> {
+export interface InputProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<InputHTMLAttributes<HTMLInputElement>, 'style'> {
     as: 'input';
 }
 
-interface DivProps extends BaseInteractiveProps, Omit<HTMLAttributes<HTMLDivElement>, 'style'> {
+export interface DivProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<HTMLAttributes<HTMLDivElement>, 'style'> {
     as: 'div';
 }
 
-interface SpanProps extends BaseInteractiveProps, Omit<HTMLAttributes<HTMLSpanElement>, 'style'> {
+export interface SpanProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<HTMLAttributes<HTMLSpanElement>, 'style'> {
     as: 'span';
 }
 
 // Discriminated union for all element types
-export type AbstractInteractiveBaseProps =
-    | ButtonProps
-    | InputProps
-    | DivProps
-    | SpanProps;
+export type AbstractInteractiveBaseProps<T extends string = string> =
+    | ButtonProps<T>
+    | InputProps<T>
+    | DivProps<T>
+    | SpanProps<T>;

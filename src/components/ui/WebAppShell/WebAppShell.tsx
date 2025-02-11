@@ -1,7 +1,7 @@
-import { ComponentPanel, PropertyEditorPanel, ThemePanel } from '../panels';
-import { usePanelVisibility } from '../../../store/uiStore';
-import { IconColumn } from '../elements/IconColumn';
-import { Grid } from '../elements/Grid';
+import { ComponentPanel, PropertyEditorPanel, ThemePanel } from '@/components/ui/organisms/panels';
+import { usePanelVisibility } from '@/store/uiStore';
+import { IconColumn } from '../molecules/IconColumn';
+import { Grid } from '../atoms/Grid';
 
 /**
  * Main application shell that manages the layout and positioning of panels

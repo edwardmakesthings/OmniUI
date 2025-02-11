@@ -41,7 +41,7 @@ export const elementConfigurations: ElementConfigurations = {
             'data-editing': baseProps.isEditing ?? false,
         }),
         render: (props, styles, children) => (
-            <button {...props} className={styles.base}>
+            <button {...props} className={styles.root}>
                 {children}
             </button>
         ),
@@ -81,7 +81,7 @@ export const elementConfigurations: ElementConfigurations = {
             'data-editing': baseProps.isEditing ?? false,
         }),
         render: (props, styles) => (
-            <input {...props} className={styles.base} />
+            <input {...props} className={styles.root} />
         ),
         getDefaultStyles: (elements) => ({
             default: elements.reduce((acc, element) => ({
@@ -106,7 +106,7 @@ export const elementConfigurations: ElementConfigurations = {
             'data-editing': baseProps.isEditing ?? false,
         }),
         render: (props, styles, children) => (
-            <div {...props} className={styles.base}>
+            <div {...props} className={styles.root}>
                 {children}
             </div>
         ),
@@ -133,7 +133,7 @@ export const elementConfigurations: ElementConfigurations = {
             'data-editing': baseProps.isEditing ?? false,
         }),
         render: (props, styles, children) => (
-            <span {...props} className={styles.base}>
+            <span {...props} className={styles.root}>
                 {children}
             </span>
         ),

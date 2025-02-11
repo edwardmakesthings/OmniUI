@@ -5,7 +5,10 @@ import {
     StyledElements,
     StyleVariants,
     StyleValue,
-    StyleProps
+    StyleProps,
+    ComputedStyles,
+    WithRequired,
+    ComputedElementStyle
 } from './styleTypes';
 import { Theme } from './themeTypes';
 import { tokenTransformers } from './themeUtils';
@@ -45,26 +48,57 @@ function resolveStyleValue(
     return value.fallback || '';
 }
 
+
 /**
- * Computes a class name for a single element based on its style definition and current state
- * @param element The element's style definition
- * @param state The current state of the component
- * @returns The computed class name
+ * Computes the resolved style values for a given element style,
+ * resolving any token references against the given theme.
+ *
+ * @param {ElementStyle | undefined} element The element style to compute.
+ * @param {Theme} [theme] The theme against which to resolve tokens.
+ * @return {ComputedElementStyle} The computed element style.
  */
 export function computeElementStyle(
     element: ElementStyle | undefined,
-    state: StyleState,
     theme?: Theme
-): string {
-    if (!element) return '';
+): ComputedElementStyle {
+    if (!element) {
+        return {};
+    }
 
+    return {
+        base: resolveStyleValue(element.base, theme),
+        hover: resolveStyleValue(element.hover, theme),
+        focus: resolveStyleValue(element.focus, theme),
+        active: resolveStyleValue(element.active, theme),
+        pressed: resolveStyleValue(element.pressed, theme),
+        disabled: resolveStyleValue(element.disabled, theme),
+        editing: resolveStyleValue(element.editing, theme)
+    };
+}
+
+/**
+ * Combines a computed element style with the current state of the component
+ * and an optional className to generate a class name string.
+ *
+ * @param {ComputedElementStyle} styles The computed element style
+ * @param {StyleState} state The current state of the component
+ * @param {string} [className] Optional className to be combined with the computed style
+ * @return {string} The combined class name
+ */
+export function combineComputedStyles(
+    styles: ComputedElementStyle,
+    state: StyleState,
+    className?: string
+): string {
     return cn(
-        resolveStyleValue(element.base, theme),
-        state.isHovered && resolveStyleValue(element.hover, theme),
-        state.isFocused && resolveStyleValue(element.focus, theme),
-        state.isActive && resolveStyleValue(element.active, theme),
-        state.isPressed && resolveStyleValue(element.pressed, theme),
-        state.isDisabled && resolveStyleValue(element.disabled, theme)
+        styles.base,
+        state.isHovered && styles.hover,
+        state.isFocused && styles.focus,
+        state.isActive && styles.active,
+        state.isPressed && styles.pressed,
+        state.isDisabled && styles.disabled,
+        state.isEditing && styles.editing,
+        className
     );
 }
 
@@ -89,82 +123,40 @@ export function computeElementStyle(
  */
 export function computeStyles<T extends string>(
     defaultStyles: StyleVariants<T>,
-    props: StyleProps<T>,
-    state: StyleState
-): Record<T, string> {
+    props: StyleProps<T>
+): ComputedStyles<T> {
     const variant = props.variant || 'default';
     const baseStyles = defaultStyles[variant] || {} as StyledElements<T>;
     const themeStyles = props.themeOverrides?.variants?.[variant] || {} as StyledElements<T>;
     const elementOverrides = props.elements || {} as StyledElements<T>;
 
-    // Initialize result
-    const result = {} as Record<T, string>;
+    const result = {} as ComputedStyles<T>;
 
     // Get all possible element keys
-    const elementKeys = new Set([
-        ...Object.keys(baseStyles),
-        ...Object.keys(themeStyles),
-        ...Object.keys(elementOverrides)
+    const allElements = new Set<WithRequired<T, 'root'>>([
+        'root' as WithRequired<T, 'root'>,
+        ...Object.keys(baseStyles) as WithRequired<T, 'root'>[],
+        ...Object.keys(themeStyles) as WithRequired<T, 'root'>[],
+        ...Object.keys(elementOverrides) as WithRequired<T, 'root'>[]
     ]);
 
     // Compute styles for each element
-    elementKeys.forEach(key => {
-        const elementKey = key as T;
+    allElements.forEach(elementKey => {
         const mergedStyle: ElementStyle = {
             ...baseStyles[elementKey],
             ...themeStyles[elementKey],
             ...elementOverrides[elementKey]
         };
 
-        result[elementKey] = computeElementStyle(mergedStyle, state, props.theme);
+        result[elementKey] = computeElementStyle(mergedStyle, props.theme);
     });
 
     return result;
 }
 
-// Example style definition for IconButton with theme tokens
-export const defaultIconButtonStyles: StyleVariants<'container' | 'icon'> = {
-    default: {
-        container: {
-            base: {
-                token: 'components.iconButton.default.container',
-                fallback: 'inline-flex items-center justify-center transition-colors bg-gray-600 text-white rounded-md p-2'
-            },
-            hover: {
-                token: 'components.iconButton.default.containerHover',
-                fallback: 'hover:bg-gray-700'
-            },
-            focus: 'focus:ring-2 focus:ring-gray-500',
-            active: 'active:bg-gray-800',
-            disabled: 'disabled:opacity-50 disabled:cursor-not-allowed'
-        },
-        icon: {
-            base: {
-                token: 'components.iconButton.default.icon',
-                fallback: 'w-5 h-5'
-            },
-            hover: 'group-hover:text-white',
-            disabled: 'group-disabled:text-gray-400'
-        }
-    },
-    ghost: {
-        container: {
-            base: {
-                token: 'components.iconButton.ghost.container',
-                fallback: 'inline-flex items-center justify-center transition-colors bg-transparent text-gray-300 p-2'
-            },
-            hover: {
-                token: 'components.iconButton.ghost.containerHover',
-                fallback: 'hover:bg-gray-700/50 hover:text-white'
-            },
-            focus: 'focus:ring-2 focus:ring-gray-500',
-            active: 'active:bg-gray-800/50',
-            disabled: 'disabled:opacity-50 disabled:cursor-not-allowed'
-        },
-        icon: {
-            base: 'w-5 h-5',
-            hover: 'group-hover:text-white',
-            disabled: 'group-disabled:text-gray-400'
-        }
-    }
+export const defaultEditingStyles: ElementStyle = {
+    base: 'relative',
+    hover: 'outline-dashed outline-2 outline-gray-600',
+    pressed: 'cursor-grabbing',
+    editing: 'cursor-grab'
 };

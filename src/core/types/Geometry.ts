@@ -35,7 +35,11 @@ export const MeasurementVectorUtils = {
      * @param context Optional context for unit conversions
      * @returns The converted measurement vector
      */
-    convert(vector: MeasurementVector, targetUnit: UnitType, context?: ConversionContext): MeasurementVector {
+    convert(
+        vector: MeasurementVector,
+        targetUnit: UnitType = 'px',
+        context?: ConversionContext
+    ): MeasurementVector {
         return this.transform(vector, measurement =>
             MeasurementUtils.convert(measurement, targetUnit, context)
         );
@@ -68,7 +72,11 @@ export const MeasurementVectorUtils = {
      * @param context Optional context for unit conversions
      * @returns The sum of the two measurement vectors in pixels
      */
-    add(a: MeasurementVector, b: MeasurementVector, context?: ConversionContext): MeasurementVector {
+    add(
+        a: MeasurementVector,
+        b: MeasurementVector,
+        context?: ConversionContext
+    ): MeasurementVector {
         const aPixels = this.convert(a, 'px', context);
         const bPixels = this.convert(b, 'px', context);
 
@@ -84,6 +92,15 @@ export interface Position extends MeasurementVector {
     x: Measurement;
     y: Measurement;
 }
+
+/**
+ * Represents a flexible size input value that can be converted to a Position object.
+ * - number: treated as pixels
+ * - Measurement: creates uniform size using the measurement
+ * - Position: used directly
+ * - null/undefined: allows for optional values
+ */
+export type PositionValue = number | Measurement | Position | undefined | null;
 
 /**
  * Position-specific utilities that extend vector utils
@@ -105,7 +122,7 @@ export const PositionUtils = {
      * @param unit The unit to use for both x and y coordinates
      * @returns A Position object with both x and y measurements set to the given value
      */
-    uniform(value: number, unit: UnitType): Position {
+    uniform(value: number, unit: UnitType = 'px'): Position {
         const measurement = MeasurementUtils.create(value, unit);
         return { x: measurement, y: measurement };
     },
@@ -124,7 +141,11 @@ export const PositionUtils = {
      * @param context Optional context for unit conversions.
      * @returns A new position object with coordinates converted to the target unit.
      */
-    convert(position: Position, targetUnit: UnitType, context?: ConversionContext): Position {
+    convert(
+        position: Position,
+        targetUnit: UnitType = 'px',
+        context?: ConversionContext
+    ): Position {
         return MeasurementVectorUtils.convert(position, targetUnit, context) as Position;
     },
 
@@ -135,9 +156,63 @@ export const PositionUtils = {
      * @param context Optional context for unit conversions
      * @returns A new position object with coordinates equal to the sum of the input positions
      */
-    add(a: Position, b: Position, context?: ConversionContext): Position {
+    add(
+        a: Position,
+        b: Position,
+        context?: ConversionContext
+    ): Position {
         return MeasurementVectorUtils.add(a, b, context) as Position;
-    }
+    },
+
+    /**
+     * Compares two positions to determine if they are equal.
+     * @param a The first position to compare
+     * @param b The second position to compare
+     * @param context Optional context for unit conversions
+     * @returns True if the two positions are equal, false otherwise.
+     */
+    equals(
+        a: Position,
+        b: Position,
+        context?: ConversionContext
+    ): boolean {
+        const aPixels = this.convert(a, 'px', context);
+        const bPixels = this.convert(b, 'px', context);
+
+        return Math.abs(aPixels.x.value - bPixels.x.value) < Number.EPSILON &&
+            Math.abs(aPixels.y.value - bPixels.y.value) < Number.EPSILON;
+    },
+
+    /**
+     * Creates a Position object from a given value. If the value is undefined or null,
+     * it returns a default Position. If the value is a number, it treats it as a position in pixels.
+     * If the value is a Measurement, it creates a uniform Position with x and y set
+     * to the measurement's value and unit. If the value is already a Position, it returns it.
+     *
+     * @param value The input value which can be a number, Measurement, or Position
+     * @param defaultValue The default Position to return if the input value is null or undefined
+     * @returns A Position object derived from the input value or the default Position
+     */
+    fromValue(
+        value: PositionValue,
+        defaultValue: Position
+    ): Position {
+        // If the value is undefined or null, return the default value
+        if (!value) return defaultValue;
+
+        // If the value is a number, treat it as pixels
+        if (typeof value === 'number') {
+            return this.uniform(value, 'px');
+        }
+
+        // If the value is a measurement, create a uniform position
+        if ('unit' in value && 'value' in value) {
+            return this.uniform((value as Measurement).value, (value as Measurement).unit);
+        }
+
+        // If the value is a position, return it
+        return value;
+    },
 };
 
 /**
@@ -147,6 +222,15 @@ export interface Size extends MeasurementVector {
     width: Measurement;
     height: Measurement;
 }
+
+/**
+ * Represents a flexible size input value that can be converted to a Size object.
+ * - number: treated as pixels
+ * - Measurement: creates uniform size using the measurement
+ * - Size: used directly
+ * - null/undefined: allows for optional values
+ */
+export type SizeValue = number | Measurement | Size | undefined | null;
 
 /**
  * Size-specific utilities that extend vector utils
@@ -168,7 +252,7 @@ export const SizeUtils = {
      * @param unit The unit to use for both width and height
      * @returns A Size object with both width and height measurements set to the given value
      */
-    uniform(value: number, unit: UnitType): Size {
+    uniform(value: number, unit: UnitType = 'px'): Size {
         const measurement = MeasurementUtils.create(value, unit);
         return { width: measurement, height: measurement };
     },
@@ -180,7 +264,11 @@ export const SizeUtils = {
      * @param context Optional context for unit conversions.
      * @returns A new size object with dimensions converted to the target unit.
      */
-    convert(size: Size, targetUnit: UnitType, context?: ConversionContext): Size {
+    convert(
+        size: Size,
+        targetUnit: UnitType = 'px',
+        context?: ConversionContext
+    ): Size {
         return MeasurementVectorUtils.convert(size, targetUnit, context) as Size;
     },
 
@@ -191,8 +279,122 @@ export const SizeUtils = {
      * @param context Optional context for unit conversions
      * @returns A new size object with dimensions equal to the sum of the input sizes
      */
-    add(a: Size, b: Size, context?: ConversionContext): Size {
+    add(
+        a: Size,
+        b: Size,
+        context?: ConversionContext
+    ): Size {
         return MeasurementVectorUtils.add(a, b, context) as Size;
+    },
+
+    /**
+     * Compares two sizes to determine if they are equal.
+     * @param a The first size to compare
+     * @param b The second size to compare
+     * @param context Optional context for unit conversions
+     * @returns True if the two sizes are equal, false otherwise.
+     */
+    equals(
+        a: Size,
+        b: Size,
+        context?: ConversionContext
+    ): boolean {
+        const aPixels = this.convert(a, 'px', context);
+        const bPixels = this.convert(b, 'px', context);
+
+        return Math.abs(aPixels.width.value - bPixels.width.value) < Number.EPSILON &&
+            Math.abs(aPixels.height.value - bPixels.height.value) < Number.EPSILON;
+    },
+
+    /**
+     * Creates a Size object from a SizeValue input.
+     * - If given a number, creates a uniform Size in pixels
+     * - If given a Measurement, creates a uniform Size with that measurement
+     * - If given a Size, returns it directly
+     * - If given null/undefined, returns the default value
+     *
+     * @param value The input value to convert to a Size
+     * @param defaultValue The Size to return if value is null/undefined
+     * @returns A Size object representing the input value
+     *
+     * @example
+     * // From number (pixels)
+     * SizeUtils.fromValue(42, defaultSize) // { width: 42px, height: 42px }
+     *
+     * // From measurement
+     * SizeUtils.fromValue(MeasurementUtils.create(3, 'rem'), defaultSize)
+     *
+     * // From existing Size
+     * SizeUtils.fromValue(existingSize, defaultSize)
+     *
+     * // Handling undefined
+     * SizeUtils.fromValue(undefined, defaultSize) // returns defaultSize
+     */
+    fromValue(
+        value: SizeValue,
+        defaultValue: Size
+    ): Size {
+        // If the value is undefined or null, return the default value
+        if (!value) return defaultValue;
+
+        // If the value is a number, treat it as pixels
+        if (typeof value === 'number') {
+            return this.uniform(value, 'px');
+        }
+
+        // If the value is a measurement, create a uniform size
+        if ('unit' in value && 'value' in value) {
+            return this.uniform((value as Measurement).value, (value as Measurement).unit);
+        }
+
+        // If the value is a size, return it
+        return value;
+    },
+
+    /**
+     * Converts a SizeValue to a Size based on presets.
+     * @param value The input value which can be a string (preset key), number (pixels), Measurement, or Size
+     * @param presets The presets object
+     * @param dimension The dimension of the preset to retrieve (e.g. 'width' or 'height')
+     * @param defaultPreset The default preset key if no value is provided
+     * @returns A Size object derived from the input value or the default preset
+     *
+     * @example
+     * // From preset key
+     * SizeUtils.fromPreset('lg', { lg: { width: 100, height: 200 } }, 'width', 'md')
+     *
+     * // From number (pixels)
+     * SizeUtils.fromPreset(42, { lg: { width: 100, height: 200 } }, 'width', 'md')
+     *
+     * // From measurement
+     * SizeUtils.fromPreset(MeasurementUtils.create(3, 'rem'), { lg: { width: 100, height: 200 } }, 'width', 'md')
+     *
+     * // From existing Size
+     * SizeUtils.fromPreset(existingSize, { lg: { width: 100, height: 200 } }, 'width', 'md')
+     *
+     * // Handling undefined
+     * SizeUtils.fromPreset(undefined, { lg: { width: 100, height: 200 } }, 'width', 'md') // returns default preset
+     */
+    fromPreset<T extends string>(
+        value: T | SizeValue,
+        presets: Record<string, Record<string, number | Measurement | Size>>,
+        dimension: string,
+        defaultPreset: T
+    ): Size {
+        // If no value is provided, return the preset dimension as a Size
+        if (!value) {
+            const presetValue = presets[defaultPreset][dimension];
+            return this.fromValue(presetValue, this.minimum());
+        }
+
+        // If it's a preset key, convert that dimension to a Size
+        if (typeof value === 'string') {
+            const presetValue = presets[value in presets ? value : defaultPreset][dimension];
+            return this.fromValue(presetValue, this.minimum());
+        }
+
+        // For non-preset values, treat as regular size value
+        return this.fromValue(value, this.minimum());
     },
 
     /**
@@ -210,7 +412,11 @@ export const SizeUtils = {
      * @param context Optional context for unit conversions
      * @returns True if size fits within container
      */
-    fits(size: Size, container: Size, context?: ConversionContext): boolean {
+    fits(
+        size: Size,
+        container: Size,
+        context?: ConversionContext
+    ): boolean {
         const pixelSize = this.convert(size, 'px', context);
         const pixelContainer = this.convert(container, 'px', context);
 
@@ -224,7 +430,10 @@ export const SizeUtils = {
      * @param context Optional context for unit conversions
      * @returns The area in square pixels
      */
-    area(size: Size, context?: ConversionContext): number {
+    area(
+        size: Size,
+        context?: ConversionContext
+    ): number {
         const pixelSize = this.convert(size, 'px', context);
         return pixelSize.width.value * pixelSize.height.value;
     }

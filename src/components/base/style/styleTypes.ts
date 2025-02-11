@@ -16,6 +16,7 @@ export interface StyleState {
     isPressed: boolean;
     isActive: boolean;
     isDisabled: boolean;
+    isEditing?: boolean;
 }
 
 // Style value can be either a direct class string or a theme token reference
@@ -32,12 +33,18 @@ export interface ElementStyle {
     active?: StyleValue;
     pressed?: StyleValue;
     disabled?: StyleValue;
+    editing?: StyleValue;
 }
 
-// Type for defining which elements in a component can be styled
-export type StyledElements<T extends string> = Record<T, ElementStyle>;
+// Type helper to ensure 'root' is always included in element types
+export type WithRequired<T extends string, K extends string> = T | K;
 
-// Helper type for creating style variants
+// Type for all styled elements in a component, requiring 'root'
+export type StyledElements<T extends string> = {
+    [K in WithRequired<T, 'root'>]: ElementStyle;
+};
+
+// Helper type for creating style variants, each variant must include all elements
 export type StyleVariants<T extends string> = Record<string, StyledElements<T>>;
 
 // Theme configuration for overriding styles
@@ -54,3 +61,18 @@ export interface StyleProps<T extends string> {
     themeOverrides?: ThemeConfig<T>;
     theme?: Theme;  // Optional theme to use for token resolution
 }
+
+export interface ComputedElementStyle {
+    base?: string;
+    hover?: string;
+    focus?: string;
+    active?: string;
+    pressed?: string;
+    disabled?: string;
+    editing?: string;
+}
+
+// The result of style computation includes all elements and their states
+export type ComputedStyles<T extends string> = {
+    [K in WithRequired<T, 'root'>]: ComputedElementStyle;
+};
