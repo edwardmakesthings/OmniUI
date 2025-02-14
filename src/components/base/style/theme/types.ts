@@ -9,47 +9,49 @@ export type TokenType =
     | 'opacity'
     | 'transition';
 
-// Specific value types for different token categories
+// Color token with optional dark mode variant
 export interface ColorToken {
     type: 'color';
-    value: string; // Could be HEX, RGB, HSL
+    value: string;      // CSS variable reference (var(--color-primary-500))
     darkValue?: string; // Optional dark mode variant
 }
 
+// Size token for dimensions
 export interface SizeToken {
     type: 'size';
-    value: number;
-    unit: 'px' | 'rem' | '%';
+    value: string;      // CSS variable reference (var(--size-md))
 }
 
+// Spacing token for margins, padding, etc.
 export interface SpacingToken {
     type: 'spacing';
-    value: number;
-    unit: 'px' | 'rem' | '%';
+    value: string;      // CSS variable reference (var(--spacing-md))
 }
 
+// Font token for typography
 export interface FontToken {
     type: 'font';
-    family?: string;
-    size?: number;
-    weight?: number | string;
-    lineHeight?: number;
-    unit?: 'px' | 'rem';
+    family?: string;    // CSS variable reference (var(--font-sans))
+    size?: string;      // CSS variable reference (var(--font-size-md))
+    weight?: string;    // CSS variable reference (var(--font-weight-bold))
+    lineHeight?: string;// CSS variable reference (var(--line-height-normal))
 }
 
+// Border token for borders
 export interface BorderToken {
     type: 'border';
-    width: number;
-    style: 'solid' | 'dashed' | 'dotted';
-    color: string;
-    unit: 'px';
+    width: string;      // CSS variable reference (var(--border-width-thin))
+    style: string;      // CSS variable reference (var(--border-style-solid))
+    color: string;      // CSS variable reference (var(--border-color-primary))
 }
 
+// Shadow token for box shadows
 export interface ShadowToken {
     type: 'shadow';
-    value: string; // CSS box-shadow value
+    value: string;      // CSS variable reference (var(--shadow-md))
 }
 
+// Union of all possible token types
 export type ThemeToken =
     | ColorToken
     | SizeToken
@@ -69,6 +71,11 @@ export interface Theme {
         web?: Record<string, string>;
     };
 }
+
+// Type for theme overrides
+export type ThemeOverrides = Partial<{
+    [K in keyof Theme['tokens']]: string;
+}>;
 
 // Theme to CSS variable mapping
 export interface TokenToCSSMap {

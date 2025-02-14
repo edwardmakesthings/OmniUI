@@ -1,7 +1,7 @@
-import { InteractiveBaseState } from "../types";
+import { BaseState } from "../types";
 import { BehaviorDefinition } from "./types";
 
-interface RadioState extends InteractiveBaseState {
+interface RadioState extends BaseState {
     isSelected: boolean;
     groupValue?: string | number;
 }
@@ -14,7 +14,8 @@ export const radioBehavior: BehaviorDefinition<RadioState> = {
         isPressed: false,
         isActive: false,
         isDisabled: false,
-        isSelected: false
+        isSelected: false,
+        isEditing: false
     },
     handleStateChange: (currentState: RadioState, event: string, data?: any) => {
         switch (event) {

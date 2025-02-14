@@ -3,7 +3,7 @@ import {
     ThemeToken,
     TokenToCSSMap,
     TokenToQtMap
-} from './themeTypes';
+} from './types';
 
 // Default transformers for different token types
 export const tokenTransformers = {

@@ -1,6 +1,6 @@
-import { InteractiveBaseState } from '../types';
+import { BaseState } from '../types';
 
-export interface BehaviorDefinition<TState extends InteractiveBaseState = InteractiveBaseState> {
+export interface BehaviorDefinition<TState extends BaseState = BaseState> {
     name: string;
     // How behavior modifies state
     handleStateChange: (
@@ -22,12 +22,12 @@ export type BehaviorEvent =
     | 'mouseLeave'
     | 'change';
 
-export interface ToggleState extends InteractiveBaseState {
+export interface ToggleState extends BaseState {
     isSelected: boolean;
     isIndeterminate?: boolean;
 }
 
-export interface InputState extends InteractiveBaseState {
+export interface InputState extends BaseState {
     isTouched: boolean;
     isDirty: boolean;
     isValid: boolean;

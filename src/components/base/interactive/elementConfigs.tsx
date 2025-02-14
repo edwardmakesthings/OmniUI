@@ -1,14 +1,14 @@
-import { HTMLAttributes, ReactNode } from 'react';
-import { ElementHandlers } from './elementHandlers';
-import { AbstractInteractiveBaseProps, InteractiveBaseState } from './types';
-import { StyleVariants } from '../style/styleTypes';
-import { BehaviorDefinition } from './behaviors/types';
+import { HTMLAttributes, ReactNode } from "react";
+import { ElementHandlers } from "./elementHandlers";
+import { AbstractInteractiveBaseProps, BaseState } from "./types";
+import { StyleVariants } from "../style/types";
+import { BehaviorDefinition } from "./behaviors/types";
 
 export interface ElementConfig<T extends HTMLElement> {
     getProps: (
-        baseProps: Omit<AbstractInteractiveBaseProps, 'as'>,
+        baseProps: Omit<AbstractInteractiveBaseProps, "as">,
         handlers: ElementHandlers<T>,
-        state: InteractiveBaseState
+        state: BaseState
     ) => HTMLAttributes<T>;
     render: (
         props: HTMLAttributes<T>,
@@ -16,7 +16,7 @@ export interface ElementConfig<T extends HTMLElement> {
         children?: ReactNode
     ) => JSX.Element;
     getDefaultStyles?: (elements: string[]) => StyleVariants<string>;
-    defaultBehavior?: BehaviorDefinition<InteractiveBaseState>;
+    defaultBehavior?: BehaviorDefinition<BaseState>;
     supportedBehaviors?: string[];
 }
 
@@ -30,123 +30,157 @@ type ElementConfigurations = {
 export const elementConfigurations: ElementConfigurations = {
     button: {
         getProps: (baseProps, handlers, state) => ({
-            type: 'button',
+            type: "button",
             disabled: state.isDisabled,
             onClick: handlers.handleClick,
             onMouseEnter: handlers.handleMouseEnter,
             onMouseLeave: handlers.handleMouseLeave,
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
-            'data-component-id': baseProps.instanceId ?? '',
-            'data-editing': baseProps.isEditing ?? false,
+            "data-component-id": baseProps.instanceId ?? "",
+            "data-editing": baseProps.isEditing ?? false,
         }),
         render: (props, styles, children) => (
-            <button {...props} className={styles.root}>
+            <button {...props} {...(styles.root && { className: styles.root })}>
                 {children}
             </button>
         ),
         getDefaultStyles: (elements) => ({
-            default: elements.reduce((acc, element) => ({
-                ...acc,
-                [element]: {
-                    base: 'inline-flex items-center justify-center',
-                    hover: 'hover:bg-gray-100',
-                    focus: 'focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
-                    active: 'active:bg-gray-200',
-                    disabled: 'disabled:opacity-50 disabled:cursor-not-allowed'
-                }
-            }), {})
+            default: elements.reduce(
+                (acc, element) => ({
+                    ...acc,
+                    [element]: {
+                        base: "inline-flex items-center justify-center",
+                        hover: "hover:bg-gray-100",
+                        focus: "focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
+                        active: "active:bg-gray-200",
+                        disabled:
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                    },
+                }),
+                {}
+            ),
         }),
-        supportedBehaviors: ['toggle', 'radio'],
+        supportedBehaviors: ["toggle", "radio"],
         defaultBehavior: {
-            name: 'button',
+            name: "button",
             handleStateChange: (state, event) => {
-                if (event === 'click') {
+                if (event === "click") {
                     return { isActive: !state.isActive };
                 }
                 return {};
-            }
-        }
+            },
+        },
     },
     input: {
         getProps: (baseProps, handlers, state) => ({
-            type: 'text',
+            type: "text",
             disabled: state.isDisabled,
             onClick: handlers.handleClick,
             onMouseEnter: handlers.handleMouseEnter,
             onMouseLeave: handlers.handleMouseLeave,
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
-            'data-component-id': baseProps.instanceId ?? '',
-            'data-editing': baseProps.isEditing ?? false,
+            "data-component-id": baseProps.instanceId ?? "",
+            "data-editing": baseProps.isEditing ?? false,
         }),
         render: (props, styles) => (
-            <input {...props} className={styles.root} />
+            <input
+                {...props}
+                {...(styles.root && { className: styles.root })}
+            />
         ),
         getDefaultStyles: (elements) => ({
-            default: elements.reduce((acc, element) => ({
-                ...acc,
-                [element]: {
-                    base: 'block w-full border border-gray-300 rounded-md',
-                    hover: 'hover:border-gray-400',
-                    focus: 'focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-                    disabled: 'disabled:opacity-50 disabled:cursor-not-allowed'
-                }
-            }), {})
-        })
+            default: elements.reduce(
+                (acc, element) => ({
+                    ...acc,
+                    [element]: {
+                        base: "block w-full border border-gray-300 rounded-md",
+                        hover: "hover:border-gray-400",
+                        focus: "focus:ring-2 focus:ring-blue-500 focus:border-blue-500",
+                        disabled:
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                    },
+                }),
+                {}
+            ),
+        }),
     },
     div: {
-        getProps: (baseProps, handlers, _state) => ({
+        getProps: (baseProps, handlers, state) => ({
             onClick: handlers.handleClick,
             onMouseEnter: handlers.handleMouseEnter,
             onMouseLeave: handlers.handleMouseLeave,
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
-            'data-component-id': baseProps.instanceId ?? '',
-            'data-editing': baseProps.isEditing ?? false,
+            "data-component-id": baseProps.instanceId ?? "",
+            "data-editing": baseProps.isEditing ?? false,
+            role: "button", // For accessibility
+            tabIndex: state.isDisabled ? -1 : 0, // For keyboard navigation
+            "aria-disabled": state.isDisabled,
+            "aria-expanded": state.isActive, // For dropdown-like components
         }),
         render: (props, styles, children) => (
-            <div {...props} className={styles.root}>
+            <div {...props} {...(styles.root && { className: styles.root })}>
                 {children}
             </div>
         ),
         getDefaultStyles: (elements) => ({
-            default: elements.reduce((acc, element) => ({
-                ...acc,
-                [element]: {
-                    base: '',
-                    hover: '',
-                    focus: '',
-                    disabled: 'disabled:opacity-50'
+            default: elements.reduce(
+                (acc, element) => ({
+                    ...acc,
+                    [element]: {
+                        base: "relative inline-block",
+                        hover: "",
+                        focus: "focus:outline-none",
+                        active: "",
+                        disabled: "opacity-50 cursor-not-allowed",
+                    },
+                }),
+                {}
+            ),
+        }),
+        supportedBehaviors: ["dropdown"],
+        defaultBehavior: {
+            name: "dropdown",
+            handleStateChange: (state, event) => {
+                if (event === "click") {
+                    return { isActive: !state.isActive };
                 }
-            }), {})
-        })
+                return {};
+            },
+        },
     },
     span: {
-        getProps: (baseProps, handlers, _state) => ({
+        getProps: (baseProps, handlers, state) => ({
             onClick: handlers.handleClick,
             onMouseEnter: handlers.handleMouseEnter,
             onMouseLeave: handlers.handleMouseLeave,
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
-            'data-component-id': baseProps.instanceId ?? '',
-            'data-editing': baseProps.isEditing ?? false,
+            "data-component-id": baseProps.instanceId ?? "",
+            "data-editing": baseProps.isEditing ?? false,
         }),
         render: (props, styles, children) => (
-            <span {...props} className={styles.root}>
+            <span {...props} {...(styles.root && { className: styles.root })}>
                 {children}
             </span>
         ),
         getDefaultStyles: (elements) => ({
-            default: elements.reduce((acc, element) => ({
-                ...acc,
-                [element]: {
-                    base: '',
-                    hover: '',
-                    focus: '',
-                    disabled: 'disabled:opacity-50'
-                }
-            }), {})
-        })
+            default: elements.reduce(
+                (acc, element) => ({
+                    ...acc,
+                    [element]: {
+                        base: "inline-flex items-center",
+                        hover: "",
+                        focus: "",
+                        disabled: "opacity-50",
+                    },
+                }),
+                {}
+            ),
+        }),
     },
 };
+
+export type ElementType = keyof typeof elementConfigurations;

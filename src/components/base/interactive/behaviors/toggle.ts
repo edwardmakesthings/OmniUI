@@ -3,13 +3,14 @@ import { BehaviorDefinition, ToggleState } from './types';
 export const toggleBehavior: BehaviorDefinition<ToggleState> = {
     name: 'toggle',
     initialState: {
-        isSelected: false,
-        isIndeterminate: false,
         isHovered: false,
         isFocused: false,
         isPressed: false,
         isActive: false,
-        isDisabled: false
+        isDisabled: false,
+        isSelected: false,
+        isEditing: false,
+        isIndeterminate: false
     },
     /**
      * Handles state changes for a toggle behavior.

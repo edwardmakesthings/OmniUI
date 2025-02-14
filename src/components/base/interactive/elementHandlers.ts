@@ -1,6 +1,6 @@
 import { MouseEventHandler, FocusEventHandler } from 'react';
 import { EntityId } from '@/core/types/EntityTypes';
-import { AbstractInteractiveBaseProps, InteractiveBaseState } from './types';
+import { AbstractInteractiveBaseProps, BaseState } from './types';
 
 export interface ElementHandlers<T extends HTMLElement> {
     // Basic interactions
@@ -39,8 +39,8 @@ export interface ElementHandlers<T extends HTMLElement> {
  */
 export const createElementHandlers = <T extends HTMLElement>(
     props: AbstractInteractiveBaseProps,
-    state: InteractiveBaseState,
-    handleStateChange: (updates: Partial<InteractiveBaseState>, event?: string) => void,
+    state: BaseState,
+    handleStateChange: (updates: Partial<BaseState>, event?: string) => void,
     executeInstanceBinding?: (instanceId: EntityId, bindingName: string) => Promise<void>,
     selectComponent?: (id: EntityId) => void
 ): ElementHandlers<T> => {
@@ -81,7 +81,7 @@ export const createElementHandlers = <T extends HTMLElement>(
     // Helper for state-updating handlers
     const createStateHandler = <E extends React.SyntheticEvent<T>>(
         handler: ((e: E) => void) | undefined,
-        stateUpdate?: Partial<InteractiveBaseState>
+        stateUpdate?: Partial<BaseState>
     ) => {
         return (e: E) => {
             if (stateUpdate) {

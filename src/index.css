@@ -1,50 +1,82 @@
 @import "tailwindcss";
 
 :root {
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 @theme {
-  --font-sans: "Nunito Sans", system-ui, Avenir, Helvetica, Arial, sans-serif;
+    --font-sans: "Nunito Sans", system-ui, Avenir, Helvetica, Arial, sans-serif;
 
-  --color-bg-dark: #242424;
-  --color-font-dark: #f9f9f9;
-  --color-accent-dark-neutral: #333;
-  --color-accent-dark-bright: #fab323;
+    /* Core colors */
+    --color-bg-dark: #242424;
+    --color-bg-dark-lighter: #2a2a2a;
+    --color-bg-dark-darker: #1a1a1a;
 
-  --color-bg-light: #f9f9f9;
-  --color-font-light: #242424;
-  --color-accent-light-neutral: #ccc;
-  --color-accent-light-bright: #fab323;
+    --color-font-dark: #f9f9f9;
+    --color-font-dark-muted: #999999;
+    --color-font-dark-dimmed: #666666;
 
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
+    --color-accent-dark-neutral: #333333;
+    --color-accent-dark-neutral-hover: #3d3d3d;
+    --color-accent-dark-bright: #fab323;
+    --color-accent-dark-bright-hover: #fbc54d;
 
-  /* General-purpose icon size presets (for component building) */
-  --icon-container-xs: 1.5rem;
-  --icon-container-sm: 2rem;
-  --icon-container-md: 2.5rem;
-  --icon-container-lg: 3rem;
-  --icon-container-xl: 3.5rem;
-  --icon-container-xxl: 4rem;
+    /* Light theme colors (for future use) */
+    --color-bg-light: #f9f9f9;
+    --color-font-light: #242424;
+    --color-accent-light-neutral: #cccccc;
+    --color-accent-light-bright: #fab323;
 
-  --icon-size-xs: 0.75rem;
-  --icon-size-sm: 1rem;
-  --icon-size-md: 1.25rem;
-  --icon-size-lg: 1.5rem;
-  --icon-size-xl: 1.75rem;
-  --icon-size-xxl: 2rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
 
-  /* UI-specific icon sizes */
-  /* IconColumn component */
-  --icon-column-container-size: var(--icon-container-md);
-  --icon-column-icon-size: var(--icon-size-md);
+    /* Spacing based on 10px grid */
+    --spacing-1: 0.625rem; /* 10px */
+    --spacing-2: 1.25rem; /* 20px */
+    --spacing-3: 1.875rem; /* 30px */
+    --spacing-4: 2.5rem; /* 40px */
 
-  /* PropertyEditor component */
-  --property-editor-icon-container: var(--icon-container-sm);
-  --property-editor-icon-size: var(--icon-size-sm);
+    /* Component-specific sizes */
+    --header-height: 2.5rem; /* 40px */
+    --panel-header-height: 2.5rem; /* 40px */
+    --input-height-sm: 1.875rem; /* 30px */
+    --input-height-md: 2.5rem; /* 40px */
+    --input-height-lg: 3.125rem; /* 50px */
+
+    /* Border radius */
+    --radius-sm: 0.125rem; /* 2px */
+    --radius-md: 0.25rem; /* 4px */
+    --radius-lg: 0.375rem; /* 6px */
+
+    /* Font sizes aligned with 10px grid */
+    --font-size-xs: 0.75rem; /* 12px */
+    --font-size-sm: 0.875rem; /* 14px */
+    --font-size-md: 1rem; /* 16px */
+    --font-size-lg: 1.125rem; /* 18px */
+    --font-size-xl: 1.25rem; /* 20px */
+
+    /* Icon sizes (for components, not UI) */
+    --icon-container-xs: 1.5rem;
+    --icon-container-sm: 2rem;
+    --icon-container-md: 2.5rem;
+    --icon-container-lg: 3rem;
+    --icon-container-xl: 3.5rem;
+    --icon-container-xxl: 4rem;
+
+    --icon-size-xs: 0.75rem;
+    --icon-size-sm: 1rem;
+    --icon-size-md: 1.25rem;
+    --icon-size-lg: 1.5rem;
+    --icon-size-xl: 1.75rem;
+    --icon-size-xxl: 2rem;
+
+    /* UI-specific icon sizes */
+    --icon-column-container-size: var(--icon-container-md);
+    --icon-column-icon-size: var(--icon-size-md);
+    --property-editor-icon-container: var(--icon-container-sm);
+    --property-editor-icon-size: var(--icon-size-sm);
 }

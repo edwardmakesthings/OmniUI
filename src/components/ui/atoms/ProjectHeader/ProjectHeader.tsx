@@ -9,15 +9,18 @@ const ProjectHeader = () => {
                 label={projectName}
                 options={[
                     {
-                        label: 'Change Project Name',
-                        value: 'Change Project Name',
+                        label: "Change Project Name",
+                        value: "Change Project Name",
                         icon: <EditIcon />,
-                        onClick: () => { }
+                        onClick: () => {},
+                    },
+                    {
+                        label: "Change Project Name2",
+                        value: "Change Project Name2",
+                        icon: <EditIcon />,
+                        onClick: () => {},
                     },
                 ]}
-                variant='ghost'
-                className='w-full'
-                size='sm'
             />
         </article>
     );

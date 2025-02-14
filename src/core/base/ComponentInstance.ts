@@ -1,6 +1,7 @@
 import { BaseDefinition } from './BaseDefinition';
 import { ComponentConfig } from './ComponentConfig';
 import { EntityId } from '../types/EntityTypes';
+import { BaseState } from '@/components/base/interactive/types';
 
 /**
  * Instance of a component in a layout
@@ -8,18 +9,10 @@ import { EntityId } from '../types/EntityTypes';
 export interface ComponentInstance extends BaseDefinition {
     definitionId: EntityId;
     overrides: Partial<ComponentConfig>;
-    state: ComponentInstanceState;
+    state: BaseState;
     internalBindings: Record<string, BindingConfig>;
     externalBindings: Record<string, ExternalBindingConfig>;
     // validateBindings(): BindingValidationResult;
-}
-
-export interface ComponentInstanceState {
-    isHovered: boolean;
-    isFocused: boolean;
-    isPressed: boolean;
-    isActive: boolean;
-    isDisabled: boolean;
 }
 
 export interface BindingConfig {

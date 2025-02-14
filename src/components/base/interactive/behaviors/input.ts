@@ -8,6 +8,8 @@ export const inputBehavior: BehaviorDefinition<InputState> = {
         isPressed: false,
         isActive: false,
         isDisabled: false,
+        isSelected: false,
+        isEditing: false,
         isTouched: false,
         isDirty: false,
         isValid: true

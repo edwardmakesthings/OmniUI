@@ -1,11 +1,22 @@
-import { useEffect, useState } from 'react';
-import { useComponentStore } from '@/store/componentStore';
-import { useUIStore } from '@/store/uiStore';
-import { AbstractInteractiveBaseProps, InteractiveBaseState } from './types';
-import { createElementHandlers } from './elementHandlers';
-import { elementConfigurations } from './elementConfigs';
-import { combineComputedStyles, computeStyles, defaultEditingStyles } from '../style/styleUtils';
-import { StyleState } from '../style/styleTypes';
+import { useEffect, useState } from "react";
+import { useComponentStore } from "@/store/componentStore";
+import { useUIStore } from "@/store/uiStore";
+import { AbstractInteractiveBaseProps, BaseState } from "./types";
+import { createElementHandlers } from "./elementHandlers";
+import { elementConfigurations } from "./elementConfigs";
+import {
+    combineComputedStyles,
+    composeStyles,
+    computeElementStyle,
+    computeStyles,
+    deepMerge,
+} from "../style/utils";
+import { editingStyles } from "../style/compositions";
+import {
+    ComputedElementStyle,
+    StyleProps,
+    StyleVariants,
+} from "../style/types";
 
 /**
  * Abstract base for all element components, supporting both UI and widget use cases.
@@ -14,7 +25,7 @@ import { StyleState } from '../style/styleTypes';
 export const AbstractInteractiveBase = <T extends string = string>({
     children,
     // Style configuration
-    styleElements = ['base'] as T[],  // Default to single base element
+    styleElements = ["base"] as T[], // Default to single base element
     styleProps,
     stylePreset,
     theme,
@@ -34,19 +45,27 @@ export const AbstractInteractiveBase = <T extends string = string>({
     ...props
 }: AbstractInteractiveBaseProps<T>) => {
     // UI Store integration
-    const isEditMode = useUIStore(state => state.isEditMode);
-    const selectComponent = useUIStore(state => state.selectComponent);
-    const selectedComponent = useUIStore(state => state.selectedComponent);
+    const isEditMode = useUIStore((state) => state.isEditMode);
+    const selectComponent = useUIStore((state) => state.selectComponent);
+    const selectedComponent = useUIStore((state) => state.selectedComponent);
     const isEditing = isEditingProp ?? isEditMode;
 
     // Component Store integration
-    const getInstanceState = useComponentStore(state => state.getInstanceState);
-    const updateInstanceState = useComponentStore(state => state.updateInstanceState);
-    const registerInstanceBinding = useComponentStore(state => state.registerInstanceBinding);
-    const executeInstanceBinding = useComponentStore(state => state.executeInstanceBinding);
+    const getInstanceState = useComponentStore(
+        (state) => state.getInstanceState
+    );
+    const updateInstanceState = useComponentStore(
+        (state) => state.updateInstanceState
+    );
+    const registerInstanceBinding = useComponentStore(
+        (state) => state.registerInstanceBinding
+    );
+    const executeInstanceBinding = useComponentStore(
+        (state) => state.executeInstanceBinding
+    );
 
     // Initialize state with behavior's initial state if provided
-    const [localState, setLocalState] = useState<InteractiveBaseState>({
+    const [localState, setLocalState] = useState<BaseState>({
         isHovered: false,
         isFocused: false,
         isPressed: false,
@@ -54,28 +73,32 @@ export const AbstractInteractiveBase = <T extends string = string>({
         isDisabled: !!disabled,
         isSelected: false,
         isEditing: false,
-        ...(behavior?.initialState || {})
+        ...(behavior?.initialState || {}),
     });
 
     // Get state from store if instance exists, otherwise use local state
     const elementState = instanceId
         ? {
-            ...getInstanceState(instanceId) as InteractiveBaseState || localState,
-            isSelected: selectedComponent === instanceId
-        }
+              ...((getInstanceState(instanceId) as BaseState) || localState),
+              isSelected: selectedComponent === instanceId,
+          }
         : localState;
 
     // Effect hooks for bindings and disabled state
     useEffect(() => {
         if (instanceId && bindings) {
             // Register internal bindings
-            Object.entries(bindings.internalBindings || {}).forEach(([path, config]) => {
-                registerInstanceBinding(instanceId, path, config);
-            });
+            Object.entries(bindings.internalBindings || {}).forEach(
+                ([path, config]) => {
+                    registerInstanceBinding(instanceId, path, config);
+                }
+            );
             // Register external bindings
-            Object.entries(bindings.externalBindings || {}).forEach(([path, config]) => {
-                registerInstanceBinding(instanceId, path, config);
-            });
+            Object.entries(bindings.externalBindings || {}).forEach(
+                ([path, config]) => {
+                    registerInstanceBinding(instanceId, path, config);
+                }
+            );
         }
     }, [instanceId, bindings, registerInstanceBinding]);
 
@@ -86,20 +109,21 @@ export const AbstractInteractiveBase = <T extends string = string>({
     }, [disabled]);
 
     // State management with behavior support
-    const handleStateChange = (updates: Partial<InteractiveBaseState>, event?: string) => {
-        const behaviorUpdates = event && behavior
-            ? behavior.handleStateChange(elementState, event)
-            : {};
+    const handleStateChange = (updates: Partial<BaseState>, event?: string) => {
+        const behaviorUpdates =
+            event && behavior
+                ? behavior.handleStateChange(elementState, event)
+                : {};
 
         const combinedUpdates = {
             ...updates,
-            ...behaviorUpdates
+            ...behaviorUpdates,
         };
 
         if (instanceId) {
             updateInstanceState(instanceId, combinedUpdates);
         } else {
-            setLocalState(prev => ({ ...prev, ...combinedUpdates }));
+            setLocalState((prev) => ({ ...prev, ...combinedUpdates }));
         }
     };
 
@@ -111,7 +135,7 @@ export const AbstractInteractiveBase = <T extends string = string>({
             isEditing,
             instanceId,
             bindings,
-            draggable: isEditing ? true : draggable
+            draggable: isEditing ? true : draggable,
         },
         elementState,
         handleStateChange,
@@ -126,48 +150,63 @@ export const AbstractInteractiveBase = <T extends string = string>({
             isEditing,
             instanceId,
             bindings,
-            draggable: isEditing ? true : draggable
+            draggable: isEditing ? true : draggable,
         },
         handlers,
         elementState
     );
 
     // Get base styles from preset or config
-    const defaultStyles = stylePreset?.variants || elementConfig.getDefaultStyles?.(styleElements) || {};
+    const defaultStyles =
+        stylePreset?.variants ||
+        elementConfig.getDefaultStyles?.(styleElements) ||
+        {};
 
-    // Add editing styles to each variant if in edit mode and ensure root styles are preserved
-    const stylesWithEditing = isEditing ?
-        Object.entries(defaultStyles).reduce((acc, [variantName, variantStyles]) => ({
-            ...acc,
-            [variantName]: Object.entries(variantStyles).reduce((elemAcc, [elemName, elemStyle]) => ({
-                ...elemAcc,
-                [elemName]: elemName === 'root'
-                ? elemStyle // Preserve root styles as-is
-                : {
-                    ...defaultEditingStyles,  // Base editing styles
-                    ...(elemStyle as object), // Component default styles override editing
-                }
-            }), {})
-        }), {})
+    // Add editing styles if in edit mode
+    const stylesWithEditing = isEditing
+        ? Object.entries(defaultStyles).reduce(
+              (acc, [variantName, variantStyles]) => ({
+                  ...acc,
+                  [variantName]: Object.entries(variantStyles).reduce(
+                      (elemAcc, [elemName, elemStyle]) => ({
+                          ...elemAcc,
+                          [elemName]: composeStyles(
+                              computeElementStyle(elemStyle, theme),
+                              editingStyles.default
+                          ),
+                      }),
+                      {}
+                  ),
+              }),
+              {}
+          )
         : defaultStyles;
 
-    // Compute final styles - styleProps/theme can further override both
+    // Compute all styles normally
     const computedStyles = computeStyles(
         stylesWithEditing,
-        styleProps || { variant: 'default' }
+        styleProps || { variant: "default" }
     );
 
-    const elementStyleState: StyleState = {
+    // Create state object for style computation
+    const elementStyleState: BaseState = {
         isHovered: elementState.isHovered,
         isFocused: elementState.isFocused,
         isPressed: elementState.isPressed,
         isActive: elementState.isActive,
         isDisabled: elementState.isDisabled,
-        isEditing: elementState.isEditing
-    }
+        isSelected: elementState.isSelected,
+        isEditing: elementState.isEditing,
+    };
 
-    const combinedStyles = Object.entries(computedStyles)
-        .reduce((acc, [key, value]) => ({ ...acc, [key]: combineComputedStyles(value, elementStyleState, className) }), {});
+    // Only use the root styles for the base component
+    const combinedStyles = {
+        root: combineComputedStyles(
+            computedStyles.root,
+            elementStyleState,
+            className
+        ),
+    };
 
     // Use custom renderer if provided
     if (renderElement) {
@@ -175,16 +214,12 @@ export const AbstractInteractiveBase = <T extends string = string>({
             elementProps: { ...elementProps },
             state: elementState,
             children,
-            computedStyle: combinedStyles
+            computedStyle: combinedStyles,
         });
     }
 
     // Use the configuration's render method with computed styles
-    return elementConfig.render(
-        { ...elementProps },
-        combinedStyles,
-        children
-    );
+    return elementConfig.render({ ...elementProps }, combinedStyles, children);
 };
 
 export default AbstractInteractiveBase;

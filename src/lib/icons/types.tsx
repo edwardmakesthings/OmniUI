@@ -15,8 +15,8 @@ type IconCreationOptions = {
     defaultViewBoxSize?: number;
     /* The following options are for convenient complex icon customization */
     setStrokeColor?: boolean;
-    strokeLinecap?: string;
-    strokeLinejoin?: string;
+    strokeLinecap?: "round" | "butt" | "square" | "inherit" | undefined;
+    strokeLinejoin?: "round" | "inherit" | "miter" | "bevel" | undefined;
     setFillColor?: boolean;
 };
 
