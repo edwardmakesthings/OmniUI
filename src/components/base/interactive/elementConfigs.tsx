@@ -39,6 +39,7 @@ export const elementConfigurations: ElementConfigurations = {
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
             "data-editing": baseProps.isEditing ?? false,
+            "data-selected": state.isSelected,
         }),
         render: (props, styles, children) => (
             <button {...props} {...(styles.root && { className: styles.root })}>
@@ -51,11 +52,10 @@ export const elementConfigurations: ElementConfigurations = {
                     ...acc,
                     [element]: {
                         base: "inline-flex items-center justify-center",
-                        hover: "hover:bg-gray-100",
-                        focus: "focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                        active: "active:bg-gray-200",
-                        disabled:
-                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                        hover: "bg-gray-100",
+                        focus: "ring-2 ring-offset-2 ring-blue-500",
+                        active: "bg-gray-200",
+                        disabled: "opacity-50 cursor-not-allowed",
                     },
                 }),
                 {}
@@ -83,6 +83,7 @@ export const elementConfigurations: ElementConfigurations = {
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
             "data-editing": baseProps.isEditing ?? false,
+            "data-selected": state.isSelected,
         }),
         render: (props, styles) => (
             <input
@@ -115,6 +116,7 @@ export const elementConfigurations: ElementConfigurations = {
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
             "data-editing": baseProps.isEditing ?? false,
+            "data-selected": state.isSelected,
             role: "button", // For accessibility
             tabIndex: state.isDisabled ? -1 : 0, // For keyboard navigation
             "aria-disabled": state.isDisabled,
@@ -160,6 +162,7 @@ export const elementConfigurations: ElementConfigurations = {
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
             "data-editing": baseProps.isEditing ?? false,
+            "data-selected": state.isSelected,
         }),
         render: (props, styles, children) => (
             <span {...props} {...(styles.root && { className: styles.root })}>

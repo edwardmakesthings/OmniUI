@@ -5,7 +5,6 @@ import {
     borderStyles,
     transitionStyles,
     stateStyles,
-    componentStyles,
     sizeStyles,
     focusStyles
 } from '../compositions';
@@ -17,7 +16,7 @@ const dropdownPreset: StylePreset<'trigger' | 'content' | 'item'> = {
     variants: {
         default: {
             root: composeStyles(
-                layoutStyles.flex.col.base,
+                layoutStyles.flex.col,
                 sizeStyles.width.full,
                 sizeStyles.height.input.lg,
                 'relative'
@@ -26,14 +25,14 @@ const dropdownPreset: StylePreset<'trigger' | 'content' | 'item'> = {
                 layoutStyles.flex.row.between,
                 sizeStyles.height.input.md,
                 layoutStyles.spacing.pad.sm,
-                borderStyles.accent.all.base,
-                focusStyles.ring.accent.base,
+                borderStyles.accent.all,
+                focusStyles.ring.accent,
                 transitionStyles.colors
             ),
             content: composeStyles(
-                layoutStyles.flex.col.base,
-                backgroundStyles.solid.dark.base,
-                borderStyles.accent.all.base,
+                layoutStyles.flex.col,
+                backgroundStyles.solid.dark,
+                borderStyles.accent.all,
                 sizeStyles.width.full,
                 'mt-1'
             ),
@@ -46,7 +45,7 @@ const dropdownPreset: StylePreset<'trigger' | 'content' | 'item'> = {
                 stateStyles.interactive.base,
                 {
                     hover: backgroundStyles.solid.accent.hover,
-                    selected: stateStyles.interactive.selected.base
+                    selectedBase: stateStyles.interactive.selected.base
                 }
             )
         }

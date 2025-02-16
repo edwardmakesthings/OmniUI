@@ -7,9 +7,20 @@ import {
     transitionStyles,
     stateStyles,
     textStyles,
-    borderStyles
+    editingStyles
 } from '../compositions';
 import { composeStyles } from '../utils';
+
+// Base styles shared across variants
+const baseStyles = composeStyles(
+    layoutStyles.flex.row.centerFull,
+    shapeStyles.rounded.md,
+    focusStyles.ring.accent,
+    transitionStyles.base,
+    stateStyles.interactive.base,
+    stateStyles.interactive.selectedNeutral,
+    editingStyles.default
+);
 
 export const iconButtonPreset: StylePreset<'icon'> = {
     name: 'iconButton',
@@ -17,28 +28,20 @@ export const iconButtonPreset: StylePreset<'icon'> = {
     variants: {
         default: {
             root: composeStyles(
-                layoutStyles.flex.row.center,
-                backgroundStyles.solid.dark.base,
-                textStyles.default.base,
-                shapeStyles.rounded.md,
-                focusStyles.ring.accent.base,
-                transitionStyles.colors,
-                stateStyles.interactive.base
+                baseStyles,
+                backgroundStyles.solid.dark,
+                textStyles.default
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                textStyles.default.base
+                textStyles.default
             )
         },
         ghost: {
             root: composeStyles(
-                layoutStyles.flex.row.center,
-                backgroundStyles.solid.transparent.base,
-                textStyles.default.muted,
-                shapeStyles.rounded.md,
-                focusStyles.ring.accent.base,
-                transitionStyles.colors,
-                stateStyles.interactive.base
+                baseStyles,
+                backgroundStyles.solid.transparent,
+                textStyles.default.muted
             ),
             icon: composeStyles(
                 'flex-shrink-0',
@@ -50,32 +53,24 @@ export const iconButtonPreset: StylePreset<'icon'> = {
         },
         bright: {
             root: composeStyles(
-                layoutStyles.flex.row.center,
+                baseStyles,
                 'bg-accent-dark-bright',
-                textStyles.default.base,
-                shapeStyles.rounded.md,
-                focusStyles.ring.accent.base,
-                transitionStyles.colors,
-                stateStyles.interactive.base,
+                textStyles.default,
                 {
                     hover: 'hover:bg-accent-dark-bright-hover'
                 }
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                textStyles.default.base
+                textStyles.default
             )
         },
         outline: {
             root: composeStyles(
-                layoutStyles.flex.row.center,
-                backgroundStyles.solid.transparent.base,
-                borderStyles.accent.all.base,
+                baseStyles,
+                backgroundStyles.solid.transparent,
                 textStyles.default.muted,
-                shapeStyles.rounded.md,
-                focusStyles.ring.accent.base,
-                transitionStyles.colors,
-                stateStyles.interactive.base
+                'border border-accent-dark-neutral'
             ),
             icon: composeStyles(
                 'flex-shrink-0',

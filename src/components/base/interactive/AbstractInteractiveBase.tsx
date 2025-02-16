@@ -4,19 +4,7 @@ import { useUIStore } from "@/store/uiStore";
 import { AbstractInteractiveBaseProps, BaseState } from "./types";
 import { createElementHandlers } from "./elementHandlers";
 import { elementConfigurations } from "./elementConfigs";
-import {
-    combineComputedStyles,
-    composeStyles,
-    computeElementStyle,
-    computeStyles,
-    deepMerge,
-} from "../style/utils";
-import { editingStyles } from "../style/compositions";
-import {
-    ComputedElementStyle,
-    StyleProps,
-    StyleVariants,
-} from "../style/types";
+import { combineComputedStyles, computeStyles } from "../style/utils";
 
 /**
  * Abstract base for all element components, supporting both UI and widget use cases.
@@ -25,7 +13,7 @@ import {
 export const AbstractInteractiveBase = <T extends string = string>({
     children,
     // Style configuration
-    styleElements = ["base"] as T[], // Default to single base element
+    styleElements = ["base"] as T[],
     styleProps,
     stylePreset,
     theme,
@@ -34,10 +22,14 @@ export const AbstractInteractiveBase = <T extends string = string>({
     bindings,
     // Component identification and state
     instanceId,
+    isDisabled,
+    isVisible = true,
+    isSelected: isSelectedProp,
+    onSelectedChange,
     isEditing: isEditingProp,
+    isEditable = true,
     // Rendering configuration
     renderElement,
-    disabled,
     className,
     // Drag-drop configuration
     draggable,
@@ -48,7 +40,6 @@ export const AbstractInteractiveBase = <T extends string = string>({
     const isEditMode = useUIStore((state) => state.isEditMode);
     const selectComponent = useUIStore((state) => state.selectComponent);
     const selectedComponent = useUIStore((state) => state.selectedComponent);
-    const isEditing = isEditingProp ?? isEditMode;
 
     // Component Store integration
     const getInstanceState = useComponentStore(
@@ -64,27 +55,74 @@ export const AbstractInteractiveBase = <T extends string = string>({
         (state) => state.executeInstanceBinding
     );
 
-    // Initialize state with behavior's initial state if provided
+    // Initialize local state with behavior's initial state if provided
     const [localState, setLocalState] = useState<BaseState>({
         isHovered: false,
         isFocused: false,
         isPressed: false,
         isActive: false,
-        isDisabled: !!disabled,
-        isSelected: false,
+        isDisabled: !!isDisabled,
+        isSelected: !!isSelectedProp,
+        isEditable,
         isEditing: false,
+        isVisible,
         ...(behavior?.initialState || {}),
     });
 
-    // Get state from store if instance exists, otherwise use local state
-    const elementState = instanceId
-        ? {
-              ...((getInstanceState(instanceId) as BaseState) || localState),
-              isSelected: selectedComponent === instanceId,
-          }
-        : localState;
+    // Primary state management effect
+    useEffect(() => {
+        if (!instanceId) return; // Only manage state for instances
 
-    // Effect hooks for bindings and disabled state
+        // Get current instance state
+        const currentState = getInstanceState(instanceId);
+
+        // Determine new editing state based on props and global state
+        const newEditingState = isEditingProp ?? (isEditMode && isEditable);
+
+        // Check if selection state has changed
+        const newSelectionState =
+            isSelectedProp ?? selectedComponent === instanceId;
+
+        // Only update if there are actual changes
+        if (
+            currentState.isEditing !== newEditingState ||
+            currentState.isSelected !== newSelectionState ||
+            currentState.isEditable !== isEditable ||
+            currentState.isVisible !== isVisible
+        ) {
+            updateInstanceState(instanceId, {
+                isEditable,
+                isEditing: newEditingState,
+                isSelected: newSelectionState,
+                isVisible,
+            });
+        }
+    }, [
+        instanceId,
+        isEditMode,
+        isEditable,
+        isEditingProp,
+        isSelectedProp,
+        selectedComponent,
+        isVisible,
+        getInstanceState,
+        updateInstanceState,
+    ]);
+
+    // Selection change handler
+    const handleSelectionChange = (selected: boolean) => {
+        handleStateChange({ isSelected: selected });
+        onSelectedChange?.(selected);
+    };
+
+    // Effect for disabled state
+    useEffect(() => {
+        if (isDisabled !== undefined) {
+            handleStateChange({ isDisabled: isDisabled });
+        }
+    }, [isDisabled]);
+
+    // Effect for registering bindings
     useEffect(() => {
         if (instanceId && bindings) {
             // Register internal bindings
@@ -102,11 +140,21 @@ export const AbstractInteractiveBase = <T extends string = string>({
         }
     }, [instanceId, bindings, registerInstanceBinding]);
 
-    useEffect(() => {
-        if (disabled !== undefined) {
-            handleStateChange({ isDisabled: disabled });
-        }
-    }, [disabled]);
+    // Get state from store if instance exists, otherwise use local state
+    const elementState = instanceId
+        ? {
+              ...((getInstanceState(instanceId) as BaseState) || localState),
+              isSelected: isSelectedProp ?? selectedComponent === instanceId,
+              isVisible,
+              // Editing state comes from store for instances
+          }
+        : {
+              ...localState,
+              // For non-instances, use prop or default to false
+              isEditing: isEditingProp ?? false,
+              isSelected: isSelectedProp ?? false,
+              isVisible,
+          };
 
     // State management with behavior support
     const handleStateChange = (updates: Partial<BaseState>, event?: string) => {
@@ -132,10 +180,11 @@ export const AbstractInteractiveBase = <T extends string = string>({
     const handlers = createElementHandlers(
         {
             ...props,
-            isEditing,
+            isEditing: elementState.isEditing,
             instanceId,
             bindings,
-            draggable: isEditing ? true : draggable,
+            // Only allow dragging in edit mode for editable components
+            draggable: elementState.isEditing ? isEditable : draggable,
         },
         elementState,
         handleStateChange,
@@ -143,18 +192,22 @@ export const AbstractInteractiveBase = <T extends string = string>({
         selectComponent
     );
 
-    // Get props and compute styles
-    const elementProps = elementConfig.getProps(
-        {
-            ...props,
-            isEditing,
-            instanceId,
-            bindings,
-            draggable: isEditing ? true : draggable,
-        },
-        handlers,
-        elementState
-    );
+    // Get element props
+    const elementProps = {
+        ...elementConfig.getProps(
+            {
+                ...props,
+                isEditing: elementState.isEditing,
+                instanceId,
+                bindings,
+                draggable: elementState.isEditing ? true : draggable,
+            },
+            handlers,
+            elementState
+        ),
+        style: elementState.isVisible ? undefined : { display: "none" },
+        "aria-hidden": !elementState.isVisible,
+    };
 
     // Get base styles from preset or config
     const defaultStyles =
@@ -162,48 +215,17 @@ export const AbstractInteractiveBase = <T extends string = string>({
         elementConfig.getDefaultStyles?.(styleElements) ||
         {};
 
-    // Add editing styles if in edit mode
-    const stylesWithEditing = isEditing
-        ? Object.entries(defaultStyles).reduce(
-              (acc, [variantName, variantStyles]) => ({
-                  ...acc,
-                  [variantName]: Object.entries(variantStyles).reduce(
-                      (elemAcc, [elemName, elemStyle]) => ({
-                          ...elemAcc,
-                          [elemName]: composeStyles(
-                              computeElementStyle(elemStyle, theme),
-                              editingStyles.default
-                          ),
-                      }),
-                      {}
-                  ),
-              }),
-              {}
-          )
-        : defaultStyles;
-
     // Compute all styles normally
     const computedStyles = computeStyles(
-        stylesWithEditing,
+        defaultStyles,
         styleProps || { variant: "default" }
     );
-
-    // Create state object for style computation
-    const elementStyleState: BaseState = {
-        isHovered: elementState.isHovered,
-        isFocused: elementState.isFocused,
-        isPressed: elementState.isPressed,
-        isActive: elementState.isActive,
-        isDisabled: elementState.isDisabled,
-        isSelected: elementState.isSelected,
-        isEditing: elementState.isEditing,
-    };
 
     // Only use the root styles for the base component
     const combinedStyles = {
         root: combineComputedStyles(
             computedStyles.root,
-            elementStyleState,
+            elementState,
             className
         ),
     };
@@ -211,7 +233,7 @@ export const AbstractInteractiveBase = <T extends string = string>({
     // Use custom renderer if provided
     if (renderElement) {
         return renderElement({
-            elementProps: { ...elementProps },
+            elementProps,
             state: elementState,
             children,
             computedStyle: combinedStyles,
@@ -219,7 +241,7 @@ export const AbstractInteractiveBase = <T extends string = string>({
     }
 
     // Use the configuration's render method with computed styles
-    return elementConfig.render({ ...elementProps }, combinedStyles, children);
+    return elementConfig.render(elementProps, combinedStyles, children);
 };
 
 export default AbstractInteractiveBase;

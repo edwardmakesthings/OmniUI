@@ -28,7 +28,9 @@ export interface BaseState {
     isPressed: boolean;
     isActive: boolean;
     isDisabled: boolean;
+    isVisible: boolean;
     isSelected: boolean;
+    isEditable: boolean;
     isEditing: boolean;
 }
 
@@ -63,39 +65,22 @@ export interface BaseInteractiveProps<T extends string = string> {
     behavior?: BehaviorDefinition<BaseState>;
     /** Element state bindings for widget mode */
     bindings?: Bindings;
+    /** Disable or hide element if it is supported */
+    isDisabled?: boolean;
+    isVisible?: boolean;
+    /** Whether the element is selected */
+    isSelected?: boolean;
+    onSelectedChange?: (selected: boolean) => void;  // Selection callback
     /** Whether the element is in widget edit mode */
     isEditing?: boolean;
+    isEditable?: boolean;
+
     /** Custom renderer for the element */
     renderElement?: (props: RenderElementProps) => JSX.Element;
     /** Optional class name */
     className?: string;
-    /** Disable element if it is supported */
-    disabled?: boolean;
+
 }
-
-// // Element-specific props
-// export interface ButtonProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'style'> {
-//     as: 'button';
-// }
-
-// export interface InputProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<InputHTMLAttributes<HTMLInputElement>, 'style'> {
-//     as: 'input';
-// }
-
-// export interface DivProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<HTMLAttributes<HTMLDivElement>, 'style'> {
-//     as: 'div';
-// }
-
-// export interface SpanProps<T extends string = string> extends BaseInteractiveProps<T>, Omit<HTMLAttributes<HTMLSpanElement>, 'style'> {
-//     as: 'span';
-// }
-
-// // Discriminated union for all element types
-// export type AbstractInteractiveBaseProps<T extends string = string> =
-//     | ButtonProps<T>
-//     | InputProps<T>
-//     | DivProps<T>
-//     | SpanProps<T>;
 
 export type AbstractInteractiveBaseProps<T extends string = string> =
     BaseInteractiveProps<T> &

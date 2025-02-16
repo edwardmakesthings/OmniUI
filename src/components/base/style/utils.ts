@@ -7,7 +7,8 @@ import {
     StyleProps,
     ComputedStyles,
     WithRequired,
-    ComputedElementStyle
+    ComputedElementStyle,
+    StateStyles
 } from './types';
 import { Theme } from './theme/types';
 import { tokenTransformers } from './theme/utils';
@@ -116,11 +117,18 @@ export const styleComputation = {
             base: this.resolveValue(element.base, theme),
             hover: this.resolveValue(element.hover, theme),
             focus: this.resolveValue(element.focus, theme),
-            pressed: this.resolveValue(element.pressed, theme),
             active: this.resolveValue(element.active, theme),
             disabled: this.resolveValue(element.disabled, theme),
-            selected: this.resolveValue(element.selected, theme),
-            editing: this.resolveValue(element.editing, theme)
+
+            selectedBase: this.resolveValue(element.selectedBase, theme),
+            selectedHover: this.resolveValue(element.selectedHover, theme),
+            selectedFocus: this.resolveValue(element.selectedFocus, theme),
+            selectedActive: this.resolveValue(element.selectedActive, theme),
+
+            editingBase: this.resolveValue(element.editingBase, theme),
+            editingHover: this.resolveValue(element.editingHover, theme),
+            editingFocus: this.resolveValue(element.editingFocus, theme),
+            editingActive: this.resolveValue(element.editingActive, theme)
         };
     },
 
@@ -183,16 +191,48 @@ export const styleComposition = {
     /**
      * Combines styles with component state
      */
-    withState(styles: ComputedElementStyle, state: BaseState, className?: string): string {
-        return styleUtils.merge(
-            styles.base,
-            state.isHovered ? styles.hover : undefined,
-            state.isFocused ? styles.focus : undefined,
-            state.isPressed ? styles.pressed : undefined,
-            state.isActive ? styles.active : undefined,
-            state.isDisabled ? styles.disabled : undefined,
-            state.isSelected ? styles.selected : undefined,
-            state.isEditing ? styles.editing : undefined,
+    withState(
+        styles: ComputedElementStyle,
+        state: BaseState,
+        className?: string
+    ): string {
+        // Start with base styles
+        let activeStyles: StateStyles = {
+            base: styles.base,
+            hover: styles.hover,
+            focus: styles.focus,
+            active: styles.active,
+            disabled: styles.disabled
+        };
+
+        // If selected, override with selected styles
+        if (state.isSelected) {
+            activeStyles = {
+                base: cn(activeStyles.base, styles.selectedBase),
+                hover: styles.selectedHover || activeStyles.hover,
+                focus: styles.selectedFocus || activeStyles.focus,
+                active: styles.selectedActive || activeStyles.active,
+                disabled: activeStyles.disabled
+            };
+        }
+
+        // If editing, override with editing styles
+        if (state.isEditing) {
+            activeStyles = {
+                base: cn(activeStyles.base, styles.editingBase),
+                hover: styles.editingHover || activeStyles.hover,
+                focus: styles.editingFocus || activeStyles.focus,
+                active: styles.editingActive || activeStyles.active,
+                disabled: activeStyles.disabled
+            };
+        }
+
+        return cn(
+            activeStyles.base,
+            activeStyles.hover && activeStyles.hover,
+            activeStyles.focus && activeStyles.focus,
+            activeStyles.active && activeStyles.active,
+            activeStyles.disabled && activeStyles.disabled,
             className
         );
     },
@@ -205,14 +245,14 @@ export const styleComposition = {
 
         styles.forEach(style => {
             if (typeof style === 'string') {
-                result.base = styleUtils.merge(result.base, style);
+                // If it's a string, treat it as a base style
+                result.base = cn(result.base, style);
             } else {
+                // Merge each state's styles
                 Object.entries(style).forEach(([key, value]) => {
                     if (value) {
-                        result[key as keyof ComputedElementStyle] = styleUtils.merge(
-                            result[key as keyof ComputedElementStyle],
-                            value
-                        );
+                        const stateKey = key as keyof ComputedElementStyle;
+                        result[stateKey] = cn(result[stateKey], value);
                     }
                 });
             }

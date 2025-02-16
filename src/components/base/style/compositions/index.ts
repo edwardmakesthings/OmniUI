@@ -70,12 +70,12 @@ export const textStyles = {
 export const focusStyles = {
     ring: {
         accent: {
-            base: 'focus:ring-1 focus:ring-accent-dark-bright focus:ring-offset-0'
+            focus: 'focus:ring-1 focus:ring-accent-dark-bright focus:ring-offset-0'
         }
     },
     outline: {
         accent: {
-            base: 'focus:outline-none focus:outline-accent-dark-bright'
+            focus: 'focus:outline-none focus:outline-accent-dark-bright'
         }
     }
 } as const;
@@ -96,6 +96,7 @@ export const layoutStyles = {
         row: {
             base: 'flex flex-row',
             center: 'flex flex-row items-center',
+            centerFull: 'flex flex-row items-center justify-center',
             between: 'flex flex-row items-center justify-between',
             start: 'flex flex-row items-center justify-start',
             end: 'flex flex-row items-center justify-end'
@@ -150,12 +151,20 @@ export const sizeStyles = {
 export const stateStyles = {
     interactive: {
         base: {
+            base: 'cursor-pointer',
             disabled: 'disabled:opacity-50 disabled:cursor-not-allowed',
-            loading: 'opacity-50 cursor-wait'
+            loading: 'opacity-50 cursor-wait',
         },
-        selected: {
-            base: 'bg-accent-dark-neutral text-font-dark'
-        }
+        selectedNeutral: {
+            selectedBase: 'bg-accent-dark-neutral text-font-dark',
+            selectedHover: "hover:bg-accent-dark-neutral",
+            selectedActive: "active:bg-accent-dark-neutral-hover",
+        },
+        selectedBright: {
+            selectedBase: 'bg-accent-dark-neutral text-font-dark',
+            selectedHover: "hover:bg-accent-dark-bright",
+            selectedActive: "active:bg-accent-dark-bright-hover",
+        },
     }
 } as const;
 
@@ -171,13 +180,13 @@ export const transitionStyles = {
 export const componentStyles = {
     panel: {
         container: composeStyles(
-            layoutStyles.flex.col.base,
-            backgroundStyles.solid.dark.base,
+            layoutStyles.flex.col,
+            backgroundStyles.solid.dark,
             'h-full'
         ),
         header: composeStyles(
             layoutStyles.flex.row.between,
-            borderStyles.accent.bottom.base,
+            borderStyles.accent.bottom,
             layoutStyles.spacing.pad.md,
             sizeStyles.height.input.lg
         ),
@@ -190,9 +199,8 @@ export const componentStyles = {
 
 export const editingStyles = {
     default: {
-        base: 'relative',
-        hover: 'outline-dashed outline-2 outline-gray-600',
-        pressed: 'cursor-grabbing',
-        editing: 'cursor-grab'
+        editingBase: 'relative outline-2 outline-gray-500',
+        editingHover: 'hover:bg-accent-dark-bright/20 hover:outline-4 hover:cursor-grab',
+        editingActive: 'active:cursor-grabbing'
     }
 } as const;

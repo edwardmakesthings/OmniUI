@@ -2,16 +2,12 @@ import { ComponentType, ReactNode } from "react";
 import { IconProps } from "@/lib/icons/types";
 import AbstractInteractiveBase from "@/components/base/interactive/AbstractInteractiveBase";
 import { ButtonProps } from "@/components/base/interactive/types";
-import { cn } from "@/lib/utils";
 import { IconUtils } from "@/lib/icons/utils";
 import { ICON_SIZE_CLASSES, IconPresetSize } from "@/lib/icons/presets";
 import iconButtonPreset, {
     IconButtonVariant,
 } from "@/components/base/style/presets/iconButton";
-import {
-    layoutStyles,
-    transitionStyles,
-} from "@/components/base/style/compositions";
+import { cn } from "@/lib/utils";
 
 // Props specific to IconButton
 export interface IconButtonProps extends ButtonProps<"icon"> {
@@ -62,25 +58,17 @@ export const IconButton = ({
             (IconUtils.isPresetSize(size) ? ICON_SIZE_CLASSES[size].icon : size)
     );
 
-    // Combine base layout styles with container classes and custom classes
-    const rootStyles = cn(
-        // Base layout composition
-        layoutStyles.flex.center,
-        // Transition composition
-        transitionStyles.color,
-        // Container size classes
-        containerClasses,
-        // Additional custom classes
-        className
-    );
-
-    // Merge all style props
+    // Merge style props
     const finalStyleProps = {
         ...styleProps,
         variant,
         elements: {
             root: {
-                base: rootStyles,
+                base: cn(
+                    containerClasses,
+                    styleProps?.elements?.root,
+                    className
+                ),
             },
             icon: styleProps?.elements?.icon,
         },
@@ -93,6 +81,7 @@ export const IconButton = ({
             title={tooltip}
             stylePreset={iconButtonPreset}
             styleProps={finalStyleProps}
+            isEditable={false}
             {...restProps}>
             {IconUtils.render(icon, finalIconSize, iconProps)}
         </AbstractInteractiveBase>

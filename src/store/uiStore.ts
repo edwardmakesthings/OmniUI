@@ -79,6 +79,7 @@ const DEFAULT_PANEL_CONFIGS = {
 
 interface UIStore extends UIState {
     isEditMode: boolean;
+    toggleEditMode: () => void;
     selectComponent: (id: EntityId | null) => void;
     togglePanel: (panelId: EntityId) => void;
     updateGridSettings: (settings: Partial<UIState['gridSettings']>) => void;
@@ -89,6 +90,7 @@ export const useUIStore = create<UIStore>()(
     persist(
         (set, get) => ({
             isEditMode: true,
+            toggleEditMode: () => set(state => ({ isEditMode: !state.isEditMode })),
             selectedComponent: null,
             gridSettings: DEFAULT_GRID_SETTINGS,
             // Creates a default state object for each panel using reduce with the panel ID as the key

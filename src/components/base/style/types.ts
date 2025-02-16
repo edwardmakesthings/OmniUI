@@ -12,11 +12,20 @@ export interface ElementStyle {
     base?: StyleValue;
     hover?: StyleValue;
     focus?: StyleValue;
-    pressed?: StyleValue;
     active?: StyleValue;
     disabled?: StyleValue;
-    selected?: StyleValue;
-    editing?: StyleValue;
+
+    // Selected state and its compounds
+    selectedBase?: StyleValue;
+    selectedHover?: StyleValue;
+    selectedFocus?: StyleValue;
+    selectedActive?: StyleValue;
+
+    // Editing state and its compounds
+    editingBase?: StyleValue;
+    editingHover?: StyleValue;
+    editingFocus?: StyleValue;
+    editingActive?: StyleValue;
 }
 
 // Type helper to ensure 'root' is always included in element types
@@ -45,16 +54,33 @@ export interface StyleProps<T extends string> {
     theme?: Theme;  // Optional theme to use for token resolution
 }
 
+export interface StateStyles {
+    base?: string;
+    hover?: string;
+    focus?: string;
+    active?: string;  // For pressed state
+    disabled?: string;
+}
+
 // The computed result of applying styles
 export interface ComputedElementStyle {
     base?: string;
     hover?: string;
     focus?: string;
-    pressed?: string;
     active?: string;
     disabled?: string;
-    selected?: string;
-    editing?: string;
+
+    // Selected state styles
+    selectedBase?: string;
+    selectedHover?: string;
+    selectedFocus?: string;
+    selectedActive?: string;
+
+    // Editing state styles
+    editingBase?: string;
+    editingHover?: string;
+    editingFocus?: string;
+    editingActive?: string;
 }
 
 // The result of style computation includes all elements and their states
