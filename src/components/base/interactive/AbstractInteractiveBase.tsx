@@ -109,12 +109,6 @@ export const AbstractInteractiveBase = <T extends string = string>({
         updateInstanceState,
     ]);
 
-    // Selection change handler
-    const handleSelectionChange = (selected: boolean) => {
-        handleStateChange({ isSelected: selected });
-        onSelectedChange?.(selected);
-    };
-
     // Effect for disabled state
     useEffect(() => {
         if (isDisabled !== undefined) {
@@ -183,6 +177,7 @@ export const AbstractInteractiveBase = <T extends string = string>({
             isEditing: elementState.isEditing,
             instanceId,
             bindings,
+            onSelectedChange,
             // Only allow dragging in edit mode for editable components
             draggable: elementState.isEditing ? isEditable : draggable,
         },
@@ -221,14 +216,22 @@ export const AbstractInteractiveBase = <T extends string = string>({
         styleProps || { variant: "default" }
     );
 
-    // Only use the root styles for the base component
-    const combinedStyles = {
-        root: combineComputedStyles(
-            computedStyles.root,
-            elementState,
-            className
-        ),
-    };
+    const elementNames = Object.keys(
+        computedStyles
+    ) as (keyof typeof computedStyles)[];
+
+    // Create combinedStyles by processing each element
+    const combinedStyles = elementNames.reduce((acc, elementName) => {
+        return {
+            ...acc,
+            [elementName]: combineComputedStyles(
+                computedStyles[elementName],
+                elementState,
+                // Only apply className to root element
+                elementName === "root" ? className : undefined
+            ),
+        };
+    }, {} as Record<string, string>);
 
     // Use custom renderer if provided
     if (renderElement) {

@@ -14,7 +14,6 @@ import { composeStyles } from '../utils';
 // Base styles shared across variants
 const baseStyles = composeStyles(
     layoutStyles.flex.row.centerFull,
-    shapeStyles.rounded.md,
     focusStyles.ring.accent,
     transitionStyles.base,
     stateStyles.interactive.base,
@@ -30,54 +29,45 @@ export const iconButtonPreset: StylePreset<'icon'> = {
             root: composeStyles(
                 baseStyles,
                 backgroundStyles.solid.dark,
-                textStyles.default
+                textStyles.indicatorDark
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                textStyles.default
+                textStyles.indicatorDark
             )
         },
         ghost: {
             root: composeStyles(
                 baseStyles,
                 backgroundStyles.solid.transparent,
-                textStyles.default.muted
+                textStyles.indicatorDark
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                {
-                    base: textStyles.default.muted,
-                    hover: 'group-hover:text-font-dark'
-                }
+                textStyles.indicatorDark
             )
         },
         bright: {
             root: composeStyles(
                 baseStyles,
-                'bg-accent-dark-bright',
-                textStyles.default,
-                {
-                    hover: 'hover:bg-accent-dark-bright-hover'
-                }
+                backgroundStyles.solid.accentBright,
+                textStyles.default.base,
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                textStyles.default
+                textStyles.default.base
             )
         },
         outline: {
             root: composeStyles(
                 baseStyles,
                 backgroundStyles.solid.transparent,
-                textStyles.default.muted,
+                textStyles.indicatorDark,
                 'border border-accent-dark-neutral'
             ),
             icon: composeStyles(
                 'flex-shrink-0',
-                {
-                    base: textStyles.default.muted,
-                    hover: 'group-hover:text-font-dark'
-                }
+                textStyles.indicatorDark
             )
         }
     }

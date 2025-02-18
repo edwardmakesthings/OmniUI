@@ -10,7 +10,7 @@ import iconButtonPreset, {
 import { cn } from "@/lib/utils";
 
 // Props specific to IconButton
-export interface IconButtonProps extends ButtonProps<"icon"> {
+export interface IconButtonProps extends Omit<ButtonProps<"icon">, "as"> {
     // Icon configuration
     icon: ComponentType<IconProps> | ReactNode;
     iconProps?: Partial<IconProps>;
@@ -45,8 +45,6 @@ export const IconButton = ({
     // Base props
     ...props
 }: IconButtonProps) => {
-    const { as, ...restProps } = props;
-
     // Get container size classes from IconUtils
     const containerClasses = IconUtils.getContainerClasses(
         containerSize || size
@@ -82,7 +80,8 @@ export const IconButton = ({
             stylePreset={iconButtonPreset}
             styleProps={finalStyleProps}
             isEditable={false}
-            {...restProps}>
+            {...props}
+        >
             {IconUtils.render(icon, finalIconSize, iconProps)}
         </AbstractInteractiveBase>
     );

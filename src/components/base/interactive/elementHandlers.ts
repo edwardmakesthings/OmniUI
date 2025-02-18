@@ -17,6 +17,12 @@ export interface ElementHandlers<T extends HTMLElement> {
     handleDrop?: (e: React.DragEvent<T>) => void;
 }
 
+export interface HandlerConfig extends AbstractInteractiveBaseProps {
+    isEditing: boolean;
+    instanceId?: EntityId;
+    onSelectedChange?: (selected: boolean) => void;
+}
+
 /**
  * Creates an object of event handlers for an interactive element.
  *
@@ -38,7 +44,7 @@ export interface ElementHandlers<T extends HTMLElement> {
  *   instance binding.
  */
 export const createElementHandlers = <T extends HTMLElement>(
-    props: AbstractInteractiveBaseProps,
+    props: HandlerConfig,
     state: BaseState,
     handleStateChange: (updates: Partial<BaseState>, event?: string) => void,
     executeInstanceBinding?: (instanceId: EntityId, bindingName: string) => Promise<void>,
@@ -60,6 +66,15 @@ export const createElementHandlers = <T extends HTMLElement>(
         // Handle selection in edit mode
         if (props.isEditing && props.instanceId && selectComponent) {
             e.stopPropagation(); // Prevent canvas/parent selection
+
+            // Toggle selection state
+            const newSelected = !state.isSelected;
+            handleStateChange({ isSelected: newSelected }, 'click');
+
+            // Notify selection change if callback provided
+            props.onSelectedChange?.(newSelected);
+
+            // Update UI store selection
             selectComponent(props.instanceId);
             return;
         }

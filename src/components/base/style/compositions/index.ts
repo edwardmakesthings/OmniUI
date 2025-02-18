@@ -18,6 +18,11 @@ export const backgroundStyles = {
             hover: 'hover:bg-accent-dark-neutral-hover',
             active: 'active:bg-accent-dark-neutral-hover'
         },
+        accentBright: {
+            base: 'bg-accent-dark-bright',
+            hover: 'hover:bg-accent-dark-bright-hover',
+            active: 'active:bg-accent-dark-bright-hover'
+        },
         transparent: {
             base: 'bg-transparent',
             hover: 'hover:bg-accent-dark-neutral/50',
@@ -57,6 +62,21 @@ export const textStyles = {
         muted: 'text-font-dark-muted',
         dimmed: 'text-font-dark-dimmed'
     },
+    light: {
+        base: 'text-font-light',
+        muted: 'text-font-light-muted',
+        dimmed: 'text-font-light-dimmed'
+    },
+    indicatorDark: {
+        base: 'text-font-dark-muted',
+        hover: 'hover:text-font-dark',
+        active: 'active:text-font-dark'
+    },
+    indicatorLight: {
+        base: 'text-font-light-muted',
+        hover: 'hover:text-font-light',
+        active: 'active:text-font-light'
+    },
     size: {
         xs: 'text-xs',
         sm: 'text-sm',
@@ -70,7 +90,7 @@ export const textStyles = {
 export const focusStyles = {
     ring: {
         accent: {
-            focus: 'focus:ring-1 focus:ring-accent-dark-bright focus:ring-offset-0'
+            focus: 'focus:ring-1 focus:ring-inset focus:ring-accent-dark-bright focus:ring-offset-0'
         }
     },
     outline: {
@@ -104,6 +124,7 @@ export const layoutStyles = {
         col: {
             base: 'flex flex-col',
             center: 'flex flex-col items-center',
+            centerVertical: 'flex flex-col justify-center',
             between: 'flex flex-col justify-between',
             start: 'flex flex-col justify-start',
             end: 'flex flex-col justify-end'
@@ -129,6 +150,9 @@ export const layoutStyles = {
             md: 'gap-2',  // 20px
             lg: 'gap-3'   // 30px
         }
+    },
+    transform: {
+        below: 'transform translate-y-full bottom-0',
     }
 } as const;
 

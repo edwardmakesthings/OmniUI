@@ -9,6 +9,9 @@ import { IconButton, IconButtonProps } from "../../atoms/IconButton";
 import { EntityId } from "@/core/types/EntityTypes";
 import { GearIcon, LogoIcon } from "../../icons";
 import { cn } from "@/lib/utils";
+import { backgroundStyles } from "@/components/base/style/compositions";
+import { combineComputedStyles } from "@/components/base/style/utils";
+import { defaultState } from "@/components/base/interactive/types";
 
 const ICON_COLUMN_PANELS: EntityId[] = [
     PANEL_IDS.COMPONENT_PALETTE,
@@ -20,20 +23,22 @@ const ICON_COLUMN_PANELS: EntityId[] = [
 const baseIconButtonProps: Partial<IconButtonProps> = {
     iconSize: 28,
     containerSize: "md",
-    variant: "default",
     iconProps: { strokeWidth: 1.4 },
 } as const;
-
+console.log(
+    combineComputedStyles(backgroundStyles.solid.accentBright, defaultState)
+);
 // Specific configurations for different button types
 const buttonConfigs = {
     logo: {
         ...baseIconButtonProps,
         icon: LogoIcon,
         tooltip: "OmniUI",
-        className: cn(
-            baseIconButtonProps.className,
-            "bg-accent-dark-bright text-white"
-        ),
+        variant: "bright",
+        // className: combineComputedStyles(
+        //     backgroundStyles.solid.accentBright,
+        //     defaultState
+        // ),
     },
     panel: (
         panelName: PanelName,
@@ -45,12 +50,14 @@ const buttonConfigs = {
         tooltip: PANEL_TOOLTIPS[panelName],
         isSelected: isVisible,
         onClick,
+        variant: "default",
     }),
     settings: {
         ...baseIconButtonProps,
         icon: GearIcon,
         tooltip: "Settings",
         isSelected: false,
+        variant: "default",
         className: cn(baseIconButtonProps.className, "mt-auto"),
     },
 } as const;
@@ -71,6 +78,7 @@ const IconColumn = () => {
                 if (!panelName) return null;
 
                 const { isVisible, toggle } = usePanelVisibility(panelName);
+
                 return (
                     <IconButton
                         key={id}

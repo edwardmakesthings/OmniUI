@@ -2,6 +2,7 @@ import { PanelConfig, PanelPositionValues } from "@/core/types/UI";
 import { SizeUtils } from "@/core/types/Geometry";
 import { MeasurementUtils } from "@/core/types/Measurement";
 import { PanelName, usePanelConfig } from "@/store/uiStore";
+import { ProjectHeader } from "@/components/ui/atoms";
 
 interface BasePanelProps extends PanelConfig {
     /** Panel identifier matching PANEL_IDS in uiStore */
@@ -84,6 +85,8 @@ const BasePanel = ({
                 positionClasses[config.position]
             } ${stretchClass} ${className}`}
             style={layoutStyle}>
+            {/* Add project header if left panel */}
+            {position === PanelPositionValues.Left && <ProjectHeader />}
             {children}
         </div>
     );
