@@ -48,7 +48,7 @@ const buttonConfigs = {
         ...baseIconButtonProps,
         icon: PANEL_ICONS[panelName],
         tooltip: PANEL_TOOLTIPS[panelName],
-        isSelected: isVisible,
+        selected: isVisible,
         onClick,
         variant: "default",
     }),

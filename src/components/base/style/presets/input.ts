@@ -6,7 +6,6 @@ import {
     transitionStyles,
     stateStyles,
     sizeStyles,
-    focusStyles,
     textStyles
 } from '../compositions';
 import { composeStyles } from '../utils';

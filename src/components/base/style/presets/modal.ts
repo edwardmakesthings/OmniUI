@@ -45,7 +45,7 @@ const footerStyles = composeStyles(
 const backdropStyles = composeStyles(
     'fixed inset-0 bg-black/50',
     'transition-opacity duration-300',
-    'z-40'
+    'z-40 w-screen h-screen'
 );
 
 export const modalPreset: StylePreset<'backdrop' | 'header' | 'content' | 'footer'> = {

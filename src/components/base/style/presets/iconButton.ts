@@ -3,7 +3,6 @@ import {
     backgroundStyles,
     layoutStyles,
     focusStyles,
-    shapeStyles,
     transitionStyles,
     stateStyles,
     textStyles,

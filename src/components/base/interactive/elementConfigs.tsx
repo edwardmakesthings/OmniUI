@@ -38,7 +38,7 @@ export const elementConfigurations: ElementConfigurations = {
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
-            "data-editing": baseProps.isEditing ?? false,
+            "data-editing": baseProps.editing ?? false,
             "data-selected": state.isSelected,
         }),
         render: (props, styles, children) => (
@@ -82,7 +82,7 @@ export const elementConfigurations: ElementConfigurations = {
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
-            "data-editing": baseProps.isEditing ?? false,
+            "data-editing": baseProps.editing ?? false,
             "data-selected": state.isSelected,
         }),
         render: (props, styles) => (
@@ -115,7 +115,7 @@ export const elementConfigurations: ElementConfigurations = {
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
-            "data-editing": baseProps.isEditing ?? false,
+            "data-editing": baseProps.editing ?? false,
             "data-selected": state.isSelected,
             role: "button", // For accessibility
             tabIndex: state.isDisabled ? -1 : 0, // For keyboard navigation
@@ -161,7 +161,7 @@ export const elementConfigurations: ElementConfigurations = {
             onFocus: handlers.handleFocus,
             onBlur: handlers.handleBlur,
             "data-component-id": baseProps.instanceId ?? "",
-            "data-editing": baseProps.isEditing ?? false,
+            "data-editing": baseProps.editing ?? false,
             "data-selected": state.isSelected,
         }),
         render: (props, styles, children) => (

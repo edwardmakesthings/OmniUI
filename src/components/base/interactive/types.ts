@@ -92,7 +92,7 @@ export const editingState: BaseState = {
     isVisible: true,
     isSelected: false,
     isEditable: true,
-    isEditing: true
+    isEditing: false
 }
 
 export interface Bindings {
@@ -110,8 +110,43 @@ export interface RenderElementProps {
 export interface BaseInteractiveProps<T extends string = string> {
     /** Element HTML type */
     as: ElementType;
+
     /** Element's content */
     children?: ReactNode;
+
+    /** Component identification and state */
+    instanceId?: EntityId;
+
+    /** Direct state control flags */
+    state?: Partial<BaseState>;
+    /** Direct selection control */
+    selected?: boolean;
+    /** Direct editing control */
+    editing?: boolean;
+    /** Can be edited when in edit mode */
+    editable?: boolean;
+
+    // Event handlers
+    /** Selection state change callback */
+    onSelectedChange?: (selected: boolean) => void;
+    /** Click event handler */
+    onClick?: (event: React.MouseEvent) => void;
+    /** Mouse enter event handler */
+    onMouseEnter?: (event: React.MouseEvent) => void;
+    /** Mouse leave event handler */
+    onMouseLeave?: (event: React.MouseEvent) => void;
+    /** Focus event handler */
+    onFocus?: (event: React.FocusEvent) => void;
+    /** Blur event handler */
+    onBlur?: (event: React.FocusEvent) => void;
+
+    /** Element behavior configuration */
+    behavior?: BehaviorDefinition<BaseState>;
+
+    /** Element state bindings for widget mode */
+    bindings?: Bindings;
+
+    // Style configuration
     /** Styled elements configuration */
     styleElements?: T[];
     /** Style props for customization */
@@ -120,25 +155,15 @@ export interface BaseInteractiveProps<T extends string = string> {
     stylePreset?: StylePreset<T>;
     /** Optional theme for token-based styling */
     theme?: Theme;
-    /** Element behavior configuration */
-    behavior?: BehaviorDefinition<BaseState>;
-    /** Element state bindings for widget mode */
-    bindings?: Bindings;
-    /** Component identification and state */
-    instanceId?: EntityId;
-    isActive?: boolean;
-    isDisabled?: boolean;
-    isVisible?: boolean;
-    isSelected?: boolean;
-    onSelectedChange?: (selected: boolean) => void;  // Selection callback
-    isEditing?: boolean;
-    isEditable?: boolean;
-
-    // Rendering configuration
-    renderElement?: (props: RenderElementProps) => JSX.Element;
+    /** Base class name for styling */
     className?: string;
 
+    // Rendering configuration
+    /** Custom render function */
+    renderElement?: (props: RenderElementProps) => JSX.Element;
+
     // Drag-drop configuration
+    /** Enable drag and drop functionality */
     draggable?: boolean;
 }
 

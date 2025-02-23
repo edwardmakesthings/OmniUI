@@ -1,14 +1,36 @@
 import { ReactNode, useCallback, useState } from "react";
 import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
-import { DivProps } from "@/components/base/interactive/types";
+import {
+    DivProps,
+    RenderElementProps,
+} from "@/components/base/interactive/types";
 import tabsPreset, { TabsVariant } from "@/components/base/style/presets/tabs";
 import { cn } from "@/lib/utils";
 
+// Types
 export interface TabItem {
     id: string;
     label: ReactNode;
     content: ReactNode;
     disabled?: boolean;
+}
+
+interface TabProps {
+    // Content
+    children: ReactNode;
+
+    // Core props
+    id: string;
+    panelId: string;
+    selected: boolean;
+    disabled?: boolean;
+
+    // Style
+    variant?: TabsVariant;
+    className?: string;
+
+    // Handlers
+    onClick: () => void;
 }
 
 export interface TabsProps
@@ -29,6 +51,114 @@ export interface TabsProps
     panelClassName?: string;
 }
 
+// Individual Tab Component
+const Tab = ({
+    // Content
+    children,
+
+    // Core props
+    id,
+    panelId,
+    selected,
+    disabled,
+
+    // Style
+    variant = "default",
+    className,
+
+    // Handlers
+    onClick,
+}: TabProps) => {
+    // Render function for the tab
+    const renderTab = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        const ariaAttributes: AriaAttributes = {};
+
+        return (
+            <button
+                {...elementProps}
+                id={id}
+                type="button"
+                role="tab"
+                aria-selected={state.isSelected}
+                aria-controls={panelId}
+                aria-disabled={state.isDisabled}
+                className={computedStyle.tab}
+                onClick={onClick}
+                disabled={state.isDisabled}
+            >
+                {children}
+            </button>
+        );
+    };
+
+    return (
+        <AbstractInteractiveBase
+            as="button"
+            stylePreset={tabsPreset}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                },
+            }}
+            state={{
+                isSelected: selected,
+                isDisabled: disabled,
+                isHovered: false,
+                isPressed: false,
+                isActive: false,
+                isVisible: true,
+                isEditable: false,
+                isEditing: false,
+            }}
+            renderElement={renderTab}
+        />
+    );
+};
+
+// Tab Panel Component
+interface TabPanelProps {
+    // Content
+    children: ReactNode;
+
+    // Core props
+    id: string;
+    tabId: string;
+    selected: boolean;
+
+    // Style
+    className?: string;
+}
+
+const TabPanel = ({
+    children,
+    id,
+    tabId,
+    selected,
+    className,
+}: TabPanelProps) => {
+    if (!selected) return null;
+
+    return (
+        <div
+            id={id}
+            role="tabpanel"
+            aria-labelledby={tabId}
+            className={className}
+            tabIndex={0}
+        >
+            {children}
+        </div>
+    );
+};
+
+// Main Tabs Component
 export const Tabs = ({
     // Content
     tabs,
@@ -46,7 +176,6 @@ export const Tabs = ({
     panelClassName,
     styleProps,
 
-    // Base props
     ...props
 }: TabsProps) => {
     // State for uncontrolled usage
@@ -67,79 +196,98 @@ export const Tabs = ({
         [controlledTab, onTabChange]
     );
 
-    const finalStyleProps = {
-        ...styleProps,
-        variant,
-        elements: {
-            root: {
-                base: className,
-            },
-            list: {
-                base: listClassName,
-            },
-            tab: {
-                base: tabClassName,
-            },
-            panel: {
-                base: panelClassName,
-            },
-        },
+    // Render function for the tab container
+    const renderTabs = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        // Get container ID for ARIA
+        const componentId =
+            (elementProps as any)?.["data-component-id"] || "tabs";
+
+        return (
+            <div
+                {...elementProps}
+                id={componentId}
+                className={computedStyle.root}
+            >
+                {/* Tab List */}
+                <div
+                    className={cn(computedStyle.list, listClassName)}
+                    role="tablist"
+                    aria-orientation="horizontal"
+                >
+                    {tabs.map((tab) => {
+                        const isSelected = selectedTab === tab.id;
+                        const tabId = `${componentId}-tab-${tab.id}`;
+                        const panelId = `${componentId}-panel-${tab.id}`;
+
+                        return (
+                            <Tab
+                                key={tab.id}
+                                id={tabId}
+                                panelId={panelId}
+                                selected={isSelected}
+                                disabled={tab.disabled}
+                                onClick={() =>
+                                    !tab.disabled && handleTabChange(tab.id)
+                                }
+                                variant={variant}
+                                className={tabClassName}
+                            >
+                                {tab.label}
+                            </Tab>
+                        );
+                    })}
+                </div>
+
+                {/* Tab Panels */}
+                {tabs.map((tab) => {
+                    const isSelected = selectedTab === tab.id;
+                    const tabId = `${componentId}-tab-${tab.id}`;
+                    const panelId = `${componentId}-panel-${tab.id}`;
+
+                    return (
+                        <TabPanel
+                            key={tab.id}
+                            id={panelId}
+                            tabId={tabId}
+                            selected={isSelected}
+                            className={cn(computedStyle.panel, panelClassName)}
+                        >
+                            {tab.content}
+                        </TabPanel>
+                    );
+                })}
+            </div>
+        );
     };
-
-    // Find active tab content
-    const activeTab = tabs.find((tab) => tab.id === selectedTab);
-
-    // Generate tab button props
-    const getTabProps = (tab: TabItem) => {
-        const isSelected = selectedTab === tab.id;
-        const baseProps = {
-            role: "tab" as const,
-            className: cn("tab", isSelected && "selected"),
-            disabled: tab.disabled,
-            onClick: () => !tab.disabled && handleTabChange(tab.id),
-        };
-
-        // ARIA attributes
-        const ariaProps = {
-            "aria-selected": isSelected,
-            "aria-controls": `panel-${tab.id}`,
-            id: `tab-${tab.id}`,
-            "aria-disabled": tab.disabled,
-        };
-
-        return { ...baseProps, ...ariaProps };
-    };
-
-    // Generate panel props
-    const getPanelProps = (tab: TabItem) => ({
-        role: "tabpanel" as const,
-        className: "panel",
-        id: `panel-${tab.id}`,
-        "aria-labelledby": `tab-${tab.id}`,
-    });
 
     return (
         <AbstractInteractiveBase
             as="div"
-            role="tablist"
             stylePreset={tabsPreset}
-            styleProps={finalStyleProps}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                    list: {
+                        base: listClassName,
+                    },
+                    tab: {
+                        base: tabClassName,
+                    },
+                    panel: {
+                        base: panelClassName,
+                    },
+                },
+            }}
+            renderElement={renderTabs}
             {...props}
-        >
-            {/* Tab List */}
-            <div className="list" role="tablist" aria-orientation="horizontal">
-                {tabs.map((tab) => (
-                    <button key={tab.id} {...getTabProps(tab)}>
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
-
-            {/* Active Tab Panel */}
-            {activeTab && (
-                <div {...getPanelProps(activeTab)}>{activeTab.content}</div>
-            )}
-        </AbstractInteractiveBase>
+        />
     );
 };
 

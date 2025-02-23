@@ -87,7 +87,9 @@ export const PushButton = ({
             aria-label={ariaLabel}
             stylePreset={buttonPreset}
             styleProps={finalStyleProps}
-            isDisabled={disabled || loading}
+            state={{
+                isDisabled: disabled || loading,
+            }}
             {...buttonProps}
         >
             {startIcon && (

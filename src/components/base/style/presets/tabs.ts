@@ -10,13 +10,6 @@ import {
 } from '../compositions';
 import { composeStyles } from '../utils';
 
-// Base styles
-const baseStyles = composeStyles(
-    layoutStyles.flex.col.base,
-    backgroundStyles.solid.dark,
-    'relative'
-);
-
 // List styles for tab headers
 const listStyles = composeStyles(
     layoutStyles.flex.row.start,
@@ -32,11 +25,8 @@ const tabStyles = composeStyles(
     stateStyles.interactive.base,
     textStyles.indicatorDark,
     'relative min-w-[100px] h-10',
-    // Selected state styling
-    'selected:text-font-dark',
-    'selected:after:absolute selected:after:bottom-0',
-    'selected:after:left-0 selected:after:right-0',
-    'selected:after:h-0.5 selected:after:bg-accent-dark-bright'
+    // Selection indicator
+    'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5'
 );
 
 // Panel styles
@@ -51,40 +41,47 @@ export const tabsPreset: StylePreset<'list' | 'tab' | 'panel'> = {
     variants: {
         default: {
             root: composeStyles(
-                baseStyles,
+                layoutStyles.flex.col.base,
+                backgroundStyles.solid.dark,
+                'relative',
                 editingStyles.default
             ),
             list: listStyles,
             tab: composeStyles(
                 tabStyles,
-                stateStyles.interactive.selectedBright
+                stateStyles.interactive.selectedBright,
+                'after:bg-accent-dark-bright after:h-[1px]'
             ),
             panel: panelStyles
         },
         ghost: {
             root: composeStyles(
-                baseStyles,
+                layoutStyles.flex.col.base,
                 backgroundStyles.solid.transparent,
+                'relative',
                 editingStyles.default
             ),
             list: listStyles,
             tab: composeStyles(
                 tabStyles,
-                stateStyles.interactive.selectedBright
+                stateStyles.interactive.selectedBright,
+                'after:bg-accent-dark-bright after:h-[1px]'
             ),
             panel: panelStyles
         },
         inset: {
             root: composeStyles(
-                baseStyles,
+                layoutStyles.flex.col.base,
                 backgroundStyles.solid.darker,
                 borderStyles.accent.all,
+                'relative',
                 editingStyles.default
             ),
             list: listStyles,
             tab: composeStyles(
                 tabStyles,
-                stateStyles.interactive.selectedNeutral
+                stateStyles.interactive.selectedNeutral,
+                'after:bg-accent-dark-neutral after:h-[1px]'
             ),
             panel: panelStyles
         }

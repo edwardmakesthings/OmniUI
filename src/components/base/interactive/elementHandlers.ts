@@ -1,4 +1,3 @@
-import { MouseEventHandler, FocusEventHandler } from 'react';
 import { EntityId } from '@/core/types/EntityTypes';
 import { AbstractInteractiveBaseProps, BaseState } from './types';
 
@@ -15,12 +14,6 @@ export interface ElementHandlers<T extends HTMLElement> {
     handleDragEnd?: (e: React.DragEvent<T>) => void;
     handleDragOver?: (e: React.DragEvent<T>) => void;
     handleDrop?: (e: React.DragEvent<T>) => void;
-}
-
-export interface HandlerConfig extends AbstractInteractiveBaseProps {
-    isEditing: boolean;
-    instanceId?: EntityId;
-    onSelectedChange?: (selected: boolean) => void;
 }
 
 /**
@@ -44,7 +37,7 @@ export interface HandlerConfig extends AbstractInteractiveBaseProps {
  *   instance binding.
  */
 export const createElementHandlers = <T extends HTMLElement>(
-    props: HandlerConfig,
+    props: AbstractInteractiveBaseProps,
     state: BaseState,
     handleStateChange: (updates: Partial<BaseState>, event?: string) => void,
     executeInstanceBinding?: (instanceId: EntityId, bindingName: string) => Promise<void>,
@@ -64,7 +57,7 @@ export const createElementHandlers = <T extends HTMLElement>(
     // Standard click handler with binding support and selection
     const handleClick = async (e: React.MouseEvent<T>) => {
         // Handle selection in edit mode
-        if (props.isEditing && props.instanceId && selectComponent) {
+        if (state.isEditing && props.instanceId && selectComponent) {
             e.stopPropagation(); // Prevent canvas/parent selection
 
             // Toggle selection state
@@ -85,12 +78,10 @@ export const createElementHandlers = <T extends HTMLElement>(
         } else if (props.instanceId && props.bindings?.externalBindings?.onClick) {
             await executeBinding('onClick');
         } else if (props.onClick) {
-            (props.onClick as MouseEventHandler<T>)(e);
+            props.onClick(e);
         }
 
-        if (props.behavior) {
-            handleStateChange({}, 'click');
-        }
+        handleStateChange({}, 'click');
     };
 
     // Helper for state-updating handlers
@@ -108,7 +99,7 @@ export const createElementHandlers = <T extends HTMLElement>(
 
     // Drag and drop handlers for component editing
     const createDragHandlers = (): Pick<ElementHandlers<T>, 'handleDragStart' | 'handleDragEnd'> => {
-        if (!props.isEditing) return {};
+        if (!state.isEditing) return {};
 
         return {
             handleDragStart: (e: React.DragEvent<T>) => {
@@ -128,21 +119,23 @@ export const createElementHandlers = <T extends HTMLElement>(
     return {
         handleClick,
         handleMouseEnter: createStateHandler<React.MouseEvent<T>>(
-            props.onMouseEnter as MouseEventHandler<T>,
+            props.onMouseEnter,
             { isHovered: true }
         ),
         handleMouseLeave: createStateHandler<React.MouseEvent<T>>(
-            props.onMouseLeave as MouseEventHandler<T>,
+            props.onMouseLeave,
             { isHovered: false }
         ),
         handleFocus: createStateHandler<React.FocusEvent<T>>(
-            props.onFocus as FocusEventHandler<T>,
+            props.onFocus,
             { isFocused: true }
         ),
         handleBlur: createStateHandler<React.FocusEvent<T>>(
-            props.onBlur as FocusEventHandler<T>,
+            props.onBlur,
             { isFocused: false }
         ),
-        ...(props.isEditing && createDragHandlers())
+        ...(state.isEditing && createDragHandlers())
     };
 };
+
+export default createElementHandlers;

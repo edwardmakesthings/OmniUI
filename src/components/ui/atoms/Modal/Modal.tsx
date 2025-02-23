@@ -1,6 +1,15 @@
-import { ReactNode, useCallback, useEffect } from "react";
+import {
+    AriaAttributes,
+    ReactNode,
+    useCallback,
+    useEffect,
+    useState,
+} from "react";
 import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
-import { DivProps } from "@/components/base/interactive/types";
+import {
+    DivProps,
+    RenderElementProps,
+} from "@/components/base/interactive/types";
 import modalPreset, {
     ModalVariant,
 } from "@/components/base/style/presets/modal";
@@ -68,6 +77,15 @@ export const Modal = ({
 
     ...props
 }: ModalProps) => {
+    // Internal mount state to handle animations
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        if (open) {
+            setMounted(true);
+        }
+    }, [open]);
+
     // Handle escape key
     useEffect(() => {
         if (!open || !closeOnEscape) return;
@@ -89,67 +107,106 @@ export const Modal = ({
         }
     }, [closeOnBackdropClick, onClose]);
 
-    const finalStyleProps = {
-        ...styleProps,
-        variant,
-        elements: {
-            root: {
-                base: className,
-            },
-            header: {
-                base: headerClassName,
-            },
-            content: {
-                base: contentClassName,
-            },
-            footer: {
-                base: footerClassName,
-            },
-            backdrop: {
-                base: backdropClassName,
-            },
-        },
+    // ARIA attributes
+    const ariaAttributes: AriaAttributes = {
+        "aria-hidden": !open,
     };
 
-    if (!open) return null;
+    // Render function for the modal
+    const renderModal = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        // Get container ID for ARIA
+        const componentId =
+            (elementProps as any)?.["data-component-id"] || "modal";
+        const headerId = `${componentId}-header`;
+        const contentId = `${componentId}-content`;
+
+        return (
+            <div
+                className={computedStyle.container}
+                onTransitionEnd={() => !open && setMounted(false)}
+                {...ariaAttributes}
+            >
+                {/* Backdrop */}
+                {showBackdrop && (
+                    <div
+                        className={cn(
+                            computedStyle.backdrop,
+                            open ? "opacity-100" : "opacity-0",
+                            backdropClassName
+                        )}
+                        onClick={handleBackdropClick}
+                        aria-hidden="true"
+                    />
+                )}
+
+                {/* Modal */}
+                <div
+                    {...elementProps}
+                    id={componentId}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby={showHeader ? headerId : undefined}
+                    aria-describedby={contentId}
+                    className={computedStyle.root}
+                    style={{
+                        width,
+                        maxHeight,
+                    }}
+                >
+                    {/* Header */}
+                    {showHeader && (
+                        <div id={headerId} className={computedStyle.header}>
+                            {title}
+                        </div>
+                    )}
+
+                    {/* Content */}
+                    <div id={contentId} className={computedStyle.content}>
+                        {children}
+                    </div>
+
+                    {/* Footer */}
+                    {showFooter && (
+                        <div className={computedStyle.footer}>{footer}</div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    if (!mounted) return null;
 
     return (
-        <div aria-hidden={!open}>
-            {/* Backdrop */}
-            {showBackdrop && (
-                <div
-                    className={cn(
-                        "backdrop",
-                        open ? "opacity-100" : "opacity-0"
-                    )}
-                    onClick={handleBackdropClick}
-                    aria-hidden="true"
-                />
-            )}
-
-            {/* Modal */}
-            <AbstractInteractiveBase
-                as="div"
-                role="dialog"
-                aria-modal="true"
-                stylePreset={modalPreset}
-                styleProps={finalStyleProps}
-                style={{
-                    width,
-                    maxHeight,
-                }}
-                {...props}
-            >
-                {/* Header */}
-                {showHeader && <div className="header">{title}</div>}
-
-                {/* Content */}
-                <div className="content">{children}</div>
-
-                {/* Footer */}
-                {showFooter && <div className="footer">{footer}</div>}
-            </AbstractInteractiveBase>
-        </div>
+        <AbstractInteractiveBase
+            as="div"
+            stylePreset={modalPreset}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                    header: {
+                        base: headerClassName,
+                    },
+                    content: {
+                        base: contentClassName,
+                    },
+                    footer: {
+                        base: footerClassName,
+                    },
+                    backdrop: {
+                        base: backdropClassName,
+                    },
+                },
+            }}
+            renderElement={renderModal}
+            {...props}
+        />
     );
 };
 

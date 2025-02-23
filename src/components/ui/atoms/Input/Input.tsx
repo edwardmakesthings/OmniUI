@@ -205,7 +205,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                         ...styleProps?.elements,
                     },
                 }}
-                isDisabled={disabled}
+                state={{
+                    isDisabled: disabled,
+                }}
                 renderElement={renderInput}
                 {...props}
             />

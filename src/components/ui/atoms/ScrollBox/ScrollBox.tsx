@@ -1,6 +1,9 @@
 import { ReactNode, useCallback, useRef } from "react";
 import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
-import { DivProps } from "@/components/base/interactive/types";
+import {
+    DivProps,
+    RenderElementProps,
+} from "@/components/base/interactive/types";
 import scrollboxPreset, {
     ScrollBoxVariant,
 } from "@/components/base/style/presets/scrollbox";
@@ -12,9 +15,9 @@ export interface ScrollBoxProps extends Omit<DivProps<"content">, "as"> {
     // Configuration
     variant?: ScrollBoxVariant;
     maxHeight?: number | string;
-
-    // Scroll behavior
     scrollToTop?: boolean;
+
+    // Handlers
     onScroll?: (event: React.UIEvent<HTMLDivElement>) => void;
 
     // Style overrides
@@ -30,8 +33,9 @@ export const ScrollBox = ({
     variant = "default",
     maxHeight,
 
-    // Scroll behavior
     scrollToTop = false,
+
+    // Handlers
     onScroll,
 
     // Style
@@ -56,36 +60,56 @@ export const ScrollBox = ({
         scrollToTopHandler();
     }
 
-    const finalStyleProps = {
-        ...styleProps,
-        variant,
-        elements: {
-            root: {
-                base: className,
-            },
-            content: {
-                base: contentClassName,
-            },
-        },
+    // Render function for the scrollbox
+    const renderScrollBox = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        // Get container ID for ARIA
+        const componentId =
+            (elementProps as any)?.["data-component-id"] || "scrollbox";
+        const contentId = `${componentId}-content`;
+
+        return (
+            <div
+                {...elementProps}
+                id={componentId}
+                role="region"
+                className={computedStyle.root}
+                style={{ maxHeight }}
+            >
+                <div
+                    ref={contentRef}
+                    id={contentId}
+                    className={computedStyle.content}
+                    onScroll={onScroll}
+                    style={{ maxHeight }}
+                >
+                    {children}
+                </div>
+            </div>
+        );
     };
 
     return (
         <AbstractInteractiveBase
             as="div"
-            role="region"
             stylePreset={scrollboxPreset}
-            styleProps={finalStyleProps}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                    content: {
+                        base: contentClassName,
+                    },
+                },
+            }}
+            renderElement={renderScrollBox}
             {...props}
-        >
-            <div
-                ref={contentRef}
-                className="content"
-                onScroll={onScroll}
-                style={{ maxHeight }}
-            >
-                {children}
-            </div>
-        </AbstractInteractiveBase>
+        />
     );
 };
 

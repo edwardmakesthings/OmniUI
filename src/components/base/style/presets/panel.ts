@@ -17,13 +17,13 @@ const baseStyles = composeStyles(
 // Header styles
 const headerStyles = composeStyles(
     layoutStyles.flex.row.between,
-    layoutStyles.spacing.pad.md,
-    borderStyles.accent.bottom,
-    'h-10' // matches --panel-header-height
+    layoutStyles.spacing.pad.sm,
+    borderStyles.accent.bottom
 );
 
 // Content styles
 const contentStyles = composeStyles(
+    layoutStyles.spacing.pad.sm,
     'flex-1',
     'overflow-auto'
 );

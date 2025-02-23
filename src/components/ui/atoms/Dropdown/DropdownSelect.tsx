@@ -313,8 +313,10 @@ export const DropdownSelect = ({
                     ...styleProps?.elements,
                 },
             }}
-            isDisabled={disabled}
-            isActive={isOpen}
+            state={{
+                isDisabled: disabled,
+                isActive: isOpen,
+            }}
             renderElement={renderDropdown}
             {...props}
         />

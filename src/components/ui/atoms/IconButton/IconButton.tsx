@@ -79,7 +79,9 @@ export const IconButton = ({
             title={tooltip}
             stylePreset={iconButtonPreset}
             styleProps={finalStyleProps}
-            isEditable={false}
+            state={{
+                isEditable: false,
+            }}
             {...props}
         >
             {IconUtils.render(icon, finalIconSize, iconProps)}

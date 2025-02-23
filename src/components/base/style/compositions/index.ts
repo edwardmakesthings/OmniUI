@@ -6,7 +6,7 @@ export const backgroundStyles = {
         dark: {
             base: 'bg-bg-dark',
             hover: 'hover:bg-bg-dark-lighter',
-            active: 'active:bg-bg-dark-darker'
+            active: 'active:bg-bg-dark-darker',
         },
         darker: {
             base: 'bg-bg-dark-darker',

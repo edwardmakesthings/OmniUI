@@ -1,6 +1,9 @@
 import { ReactNode } from "react";
 import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
-import { DivProps } from "@/components/base/interactive/types";
+import {
+    DivProps,
+    RenderElementProps,
+} from "@/components/base/interactive/types";
 import panelPreset, {
     PanelVariant,
 } from "@/components/base/style/presets/panel";
@@ -39,42 +42,68 @@ export const Panel = ({
     // Base props
     ...props
 }: PanelProps) => {
-    const finalStyleProps = {
-        ...styleProps,
-        variant,
-        elements: {
-            root: {
-                base: className,
-            },
-            header: {
-                base: headerClassName,
-            },
-            content: {
-                base: contentClassName,
-            },
-        },
+    // Render function for the panel
+    const renderPanel = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        // Get container ID for ARIA
+        const componentId =
+            (elementProps as any)?.["data-component-id"] || "panel";
+        const headerId = `${componentId}-header`;
+        const contentId = `${componentId}-content`;
+
+        return (
+            <div
+                {...elementProps}
+                id={componentId}
+                role="region"
+                aria-labelledby={showHeader ? headerId : undefined}
+                className={computedStyle.root}
+            >
+                {/* Header - maintain spacing even when empty */}
+                {showHeader && (
+                    <div
+                        id={headerId}
+                        className={cn(
+                            computedStyle.header,
+                            !header && "invisible"
+                        )}
+                    >
+                        {header}
+                    </div>
+                )}
+
+                {/* Content */}
+                <div id={contentId} className={computedStyle.content}>
+                    {children}
+                </div>
+            </div>
+        );
     };
 
     return (
         <AbstractInteractiveBase
             as="div"
-            role="region"
             stylePreset={panelPreset}
-            styleProps={finalStyleProps}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                    header: {
+                        base: headerClassName,
+                    },
+                    content: {
+                        base: contentClassName,
+                    },
+                },
+            }}
+            renderElement={renderPanel}
             {...props}
-        >
-            {showHeader && (
-                <div
-                    className={cn(
-                        "header",
-                        !header && "invisible" // Keep spacing even when empty
-                    )}
-                >
-                    {header}
-                </div>
-            )}
-            <div className="content">{children}</div>
-        </AbstractInteractiveBase>
+        />
     );
 };
 

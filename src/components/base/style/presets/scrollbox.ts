@@ -15,10 +15,10 @@ const baseStyles = composeStyles(
 
 // Content styles with custom scrollbar
 const contentStyles = composeStyles(
-    'flex-1 overflow-auto',
+    'flex-1 overflow-y-auto overflow-x-hidden',
     // Scrollbar styling
-    'scrollbar-thin scrollbar-track-transparent',
-    'scrollbar-thumb-accent-dark-neutral hover:scrollbar-thumb-accent-dark-bright',
+    'scrollbar scrollbar-thin scrollbar-thumb-accent-dark-neutral',
+    'scrollbar-track-transparent hover:scrollbar-thumb-accent-dark-bright',
     // Scrollbar corner
     'scrollbar-corner-transparent'
 );

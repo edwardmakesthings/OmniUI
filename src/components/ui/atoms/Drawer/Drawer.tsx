@@ -1,13 +1,22 @@
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import {
+    AriaAttributes,
+    ReactNode,
+    useCallback,
+    useEffect,
+    useState,
+} from "react";
 import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
-import { DivProps } from "@/components/base/interactive/types";
+import {
+    DivProps,
+    RenderElementProps,
+} from "@/components/base/interactive/types";
 import drawerPreset, {
     DrawerVariant,
 } from "@/components/base/style/presets/drawer";
 import { cn } from "@/lib/utils";
 
 export interface DrawerProps
-    extends Omit<DivProps<"overlay" | "content">, "as"> {
+    extends Omit<DivProps<"container" | "overlay" | "content">, "as"> {
     // Content
     children?: ReactNode;
 
@@ -25,8 +34,9 @@ export interface DrawerProps
 
     // Style overrides
     className?: string;
-    contentClassName?: string;
+    containerClassName?: string;
     overlayClassName?: string;
+    contentClassName?: string;
 }
 
 export const Drawer = ({
@@ -47,8 +57,9 @@ export const Drawer = ({
 
     // Style
     className,
-    contentClassName,
+    containerClassName,
     overlayClassName,
+    contentClassName,
     styleProps,
 
     ...props
@@ -61,12 +72,6 @@ export const Drawer = ({
             setMounted(true);
         }
     }, [open]);
-
-    const handleTransitionEnd = () => {
-        if (!open) {
-            setMounted(false);
-        }
-    };
 
     // Handle escape key
     useEffect(() => {
@@ -89,25 +94,11 @@ export const Drawer = ({
         }
     }, [closeOnOverlayClick, onClose]);
 
-    // Calculate size styles based on variant
-    const getSizeStyle = (): React.CSSProperties => {
-        switch (variant) {
-            case "left":
-            case "right":
-                return { width };
-            case "top":
-            case "bottom":
-                return { height };
-            default:
-                return {};
-        }
-    };
-
-    // Calculate transform based on variant
+    // Calculate transform based on variant and state
     const getTransform = (): string => {
         if (open) return "translate(0, 0)";
 
-        switch (variant) {
+        switch (variant.split("-")[0]) {
             case "left":
                 return "translateX(-100%)";
             case "right":
@@ -121,58 +112,87 @@ export const Drawer = ({
         }
     };
 
-    const finalStyleProps = {
-        ...styleProps,
-        variant,
-        elements: {
-            root: {
-                base: className,
-            },
-            content: {
-                base: contentClassName,
-            },
-            overlay: {
-                base: overlayClassName,
-            },
-        },
+    // Render function for the drawer
+    const renderDrawer = ({
+        elementProps,
+        state,
+        computedStyle,
+    }: RenderElementProps) => {
+        // Get container ID for ARIA
+        const componentId =
+            (elementProps as any)?.["data-component-id"] || "drawer";
+
+        // ARIA attributes
+        const ariaAttributes: AriaAttributes = {
+            "aria-hidden": !open,
+        };
+
+        return (
+            <div
+                className={computedStyle.container}
+                onTransitionEnd={() => !open && setMounted(false)}
+                {...ariaAttributes}
+            >
+                {/* Overlay */}
+                {showOverlay && (
+                    <div
+                        className={cn(
+                            computedStyle.overlay,
+                            open ? "opacity-100" : "opacity-0",
+                            overlayClassName
+                        )}
+                        onClick={handleOverlayClick}
+                        aria-hidden="true"
+                    />
+                )}
+
+                {/* Drawer */}
+                <div
+                    {...elementProps}
+                    id={componentId}
+                    role="dialog"
+                    aria-modal="true"
+                    className={computedStyle.root}
+                    style={{
+                        ...(variant.includes("left") ||
+                        variant.includes("right")
+                            ? { width }
+                            : { height }),
+                        transform: getTransform(),
+                    }}
+                >
+                    {children}
+                </div>
+            </div>
+        );
     };
 
     if (!mounted) return null;
 
     return (
-        <div
-            className="fixed inset-0 z-50"
-            aria-hidden={!open}
-            onTransitionEnd={handleTransitionEnd}
-        >
-            {/* Overlay/Backdrop */}
-            {showOverlay && (
-                <div
-                    className={cn(
-                        "overlay",
-                        open ? "opacity-100" : "opacity-0"
-                    )}
-                    onClick={handleOverlayClick}
-                    aria-hidden="true"
-                />
-            )}
-
-            {/* Drawer */}
-            <AbstractInteractiveBase
-                as="div"
-                role="dialog"
-                aria-modal="true"
-                stylePreset={drawerPreset}
-                styleProps={finalStyleProps}
-                style={{
-                    ...getSizeStyle(),
-                    transform: getTransform(),
-                }}
-                {...props}
-            >
-                <div className="content">{children}</div>
-            </AbstractInteractiveBase>
-        </div>
+        <AbstractInteractiveBase
+            as="div"
+            stylePreset={drawerPreset}
+            styleProps={{
+                variant,
+                elements: {
+                    root: {
+                        base: className,
+                    },
+                    container: {
+                        base: containerClassName,
+                    },
+                    overlay: {
+                        base: overlayClassName,
+                    },
+                    content: {
+                        base: contentClassName,
+                    },
+                },
+            }}
+            renderElement={renderDrawer}
+            {...props}
+        />
     );
 };
 
