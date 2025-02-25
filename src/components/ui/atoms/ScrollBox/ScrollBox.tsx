@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useRef } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -7,6 +7,7 @@ import {
 import scrollboxPreset, {
     ScrollBoxVariant,
 } from "@/components/base/style/presets/scrollbox";
+import { cn } from "@/lib/utils";
 
 export interface ScrollBoxProps extends Omit<DivProps<"content">, "as"> {
     // Content
@@ -19,6 +20,10 @@ export interface ScrollBoxProps extends Omit<DivProps<"content">, "as"> {
 
     // Handlers
     onScroll?: (event: React.UIEvent<HTMLDivElement>) => void;
+
+    // Scrollbar styling
+    scrollbarStyle?: "dark" | "light" | "accent" | "invisible";
+    scrollbarSize?: "normal" | "thin";
 
     // Style overrides
     className?: string;
@@ -43,6 +48,10 @@ export const ScrollBox = ({
     contentClassName,
     styleProps,
 
+    // Scrollbar styling
+    scrollbarStyle = "dark",
+    scrollbarSize = "normal",
+
     // Base props
     ...props
 }: ScrollBoxProps) => {
@@ -59,6 +68,13 @@ export const ScrollBox = ({
     if (scrollToTop) {
         scrollToTopHandler();
     }
+
+    // Build scrollbar class
+    const scrollbarClass = cn(
+        "scrollbar-custom",
+        `scrollbar-${scrollbarStyle}`,
+        scrollbarSize === "thin" && "scrollbar-thin"
+    );
 
     // Render function for the scrollbox
     const renderScrollBox = ({
@@ -82,7 +98,11 @@ export const ScrollBox = ({
                 <div
                     ref={contentRef}
                     id={contentId}
-                    className={computedStyle.content}
+                    className={cn(
+                        computedStyle.content,
+                        scrollbarClass,
+                        contentClassName
+                    )}
                     onScroll={onScroll}
                     style={{ maxHeight }}
                 >
@@ -93,7 +113,7 @@ export const ScrollBox = ({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={scrollboxPreset}
             styleProps={{

@@ -5,7 +5,7 @@ import {
     KeyboardEvent,
     AriaAttributes,
 } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -167,7 +167,7 @@ export function ListView<T extends ListItemMetadata>({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={listViewPreset}
             styleProps={{

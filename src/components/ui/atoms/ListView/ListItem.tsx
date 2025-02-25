@@ -1,5 +1,5 @@
 import { AriaAttributes, ComponentType, ReactNode } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -140,7 +140,7 @@ export function ListItem<T extends ListItemMetadata>({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={listItemPreset}
             styleProps={{

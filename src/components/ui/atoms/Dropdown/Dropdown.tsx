@@ -6,7 +6,7 @@ import {
     useRef,
     useEffect,
 } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     ButtonProps,
     RenderElementProps,
@@ -221,7 +221,7 @@ export const DropdownButton = ({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={dropdownPreset}
             styleProps={{

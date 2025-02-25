@@ -1,0 +1,64 @@
+/* Basic scrollbar styling */
+.scrollbar-custom {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Chrome, Edge, and Safari */
+.scrollbar-custom::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 4px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+
+.scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+}
+
+.scrollbar-custom::-webkit-scrollbar-corner {
+    background: var(--scrollbar-track);
+}
+
+/* Dark theme */
+.scrollbar-dark {
+    --scrollbar-track: rgba(0, 0, 0, 0.1);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.3);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.5);
+}
+
+/* Light theme */
+.scrollbar-light {
+    --scrollbar-track: rgba(255, 255, 255, 0.1);
+    --scrollbar-thumb: rgba(0, 0, 0, 0.2);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.4);
+}
+
+/* Variants */
+.scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.scrollbar-invisible {
+    scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-invisible::-webkit-scrollbar {
+    display: none; /* Chrome, Edge, Safari */
+}
+
+/* Accent color variant */
+.scrollbar-accent {
+    --scrollbar-thumb: var(--accent-dark-neutral);
+    --scrollbar-thumb-hover: var(--accent-dark-bright);
+}

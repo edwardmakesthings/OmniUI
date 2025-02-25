@@ -15,7 +15,8 @@ export const radioBehavior: BehaviorDefinition<RadioState> = {
         isActive: false,
         isDisabled: false,
         isSelected: false,
-        isEditing: false
+        isEditing: false,
+        isDragging: false
     },
     handleStateChange: (currentState: RadioState, event: string, data?: any) => {
         switch (event) {

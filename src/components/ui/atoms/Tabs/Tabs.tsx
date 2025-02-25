@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useState } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -96,7 +96,7 @@ const Tab = ({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="button"
             stylePreset={tabsPreset}
             styleProps={{
@@ -265,7 +265,7 @@ export const Tabs = ({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={tabsPreset}
             styleProps={{

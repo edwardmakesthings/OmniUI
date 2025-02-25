@@ -10,7 +10,8 @@ export const buttonBehavior: BehaviorDefinition<BaseState> = {
         isActive: false,
         isDisabled: false,
         isSelected: false,
-        isEditing: false
+        isEditing: false,
+        isDragging: false
     },
     handleStateChange: (currentState: BaseState, event: string) => {
         switch (event) {

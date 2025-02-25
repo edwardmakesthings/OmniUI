@@ -1,5 +1,5 @@
 import { AriaAttributes, forwardRef, ReactNode } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     ButtonProps,
     RenderElementProps,
@@ -193,7 +193,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         };
 
         return (
-            <AbstractInteractiveBase
+            <BaseInteractor
                 as="div"
                 stylePreset={inputPreset}
                 styleProps={{

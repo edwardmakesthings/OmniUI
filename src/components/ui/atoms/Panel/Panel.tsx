@@ -1,5 +1,5 @@
 import { ReactNode } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -84,7 +84,7 @@ export const Panel = ({
     };
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={panelPreset}
             styleProps={{

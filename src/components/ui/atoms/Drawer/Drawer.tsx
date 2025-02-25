@@ -5,7 +5,7 @@ import {
     useEffect,
     useState,
 } from "react";
-import { AbstractInteractiveBase } from "@/components/base/interactive/AbstractInteractiveBase";
+import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
     RenderElementProps,
@@ -170,7 +170,7 @@ export const Drawer = ({
     if (!mounted) return null;
 
     return (
-        <AbstractInteractiveBase
+        <BaseInteractor
             as="div"
             stylePreset={drawerPreset}
             styleProps={{
