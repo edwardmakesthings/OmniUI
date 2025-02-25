@@ -202,7 +202,8 @@ export const styleComposition = {
             hover: styles.hover,
             focus: styles.focus,
             active: styles.active,
-            disabled: styles.disabled
+            disabled: styles.disabled,
+            dragging: styles.dragging
         };
 
         // If selected, override with selected styles
@@ -212,7 +213,8 @@ export const styleComposition = {
                 hover: styles.selectedHover || activeStyles.hover,
                 focus: styles.selectedFocus || activeStyles.focus,
                 active: styles.selectedActive || activeStyles.active,
-                disabled: activeStyles.disabled
+                disabled: activeStyles.disabled,
+                dragging: activeStyles.dragging
             };
         }
 
@@ -223,9 +225,13 @@ export const styleComposition = {
                 hover: styles.editingHover || activeStyles.hover,
                 focus: styles.editingFocus || activeStyles.focus,
                 active: styles.editingActive || activeStyles.active,
-                disabled: activeStyles.disabled
+                disabled: activeStyles.disabled,
+                dragging: activeStyles.dragging
             };
         }
+
+        // Apply dragging style if item is being dragged
+        const draggingClass = state.isDragging ? activeStyles.dragging : '';
 
         return cn(
             activeStyles.base,
@@ -233,6 +239,7 @@ export const styleComposition = {
             activeStyles.focus && activeStyles.focus,
             activeStyles.active && activeStyles.active,
             activeStyles.disabled && activeStyles.disabled,
+            draggingClass,
             className
         );
     },

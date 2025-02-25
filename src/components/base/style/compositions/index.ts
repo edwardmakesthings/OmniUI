@@ -171,6 +171,11 @@ export const sizeStyles = {
     }
 } as const;
 
+export const draggingStyles = {
+    base: 'cursor-grabbing opacity-70 shadow-md border border-accent-dark-bright',
+    active: 'z-50',
+} as const;
+
 // State styles
 export const stateStyles = {
     interactive: {
@@ -178,6 +183,7 @@ export const stateStyles = {
             base: 'cursor-pointer',
             disabled: 'disabled:opacity-50 disabled:cursor-not-allowed',
             loading: 'opacity-50 cursor-wait',
+            dragging: 'cursor-grabbing shadow-md opacity-70'
         },
         selectedNeutral: {
             selectedBase: 'bg-accent-dark-neutral text-font-dark',

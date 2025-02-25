@@ -15,6 +15,8 @@ export interface ElementStyle {
     active?: StyleValue;
     disabled?: StyleValue;
 
+    dragging?: StyleValue;
+
     // Selected state and its compounds
     selectedBase?: StyleValue;
     selectedHover?: StyleValue;
@@ -42,7 +44,7 @@ export type StyleVariants<T extends string> = Record<string, StyledElements<T>>;
 // Theme configuration for overriding styles
 export interface ThemeConfig<T extends string> {
     variants?: Record<string, StyledElements<T>>;
-    states?: Partial<Record<keyof BaseState, StyleValue>>; // May not be needed?
+    states?: Partial<Record<keyof BaseState, StyleValue>>;
     elements?: Partial<Record<T, ElementStyle>>;
 }
 
@@ -60,6 +62,7 @@ export interface StateStyles {
     focus?: string;
     active?: string;  // For pressed state
     disabled?: string;
+    dragging?: string;
 }
 
 // The computed result of applying styles
@@ -69,6 +72,8 @@ export interface ComputedElementStyle {
     focus?: string;
     active?: string;
     disabled?: string;
+
+    dragging?: string;
 
     // Selected state styles
     selectedBase?: string;
