@@ -3,7 +3,7 @@ import { usePanelConfig } from "@/store/uiStore";
 import { ProjectHeader } from "@/components/ui/atoms/ProjectHeader";
 import { Input } from "@/components/ui/atoms/Input";
 import { EditIcon, SearchIcon } from "@/components/ui/icons";
-import SearchBar from "@/components/ui/atoms/SearchBar/SearchBar";
+import SearchBar from "@/components/ui/molecules/SearchBar/SearchBar";
 import { DropdownSelect, Modal } from "@/components/ui/atoms";
 import { PushButton } from "@/components/ui/atoms/PushButton";
 import { Tabs } from "@/components/ui/atoms/Tabs";

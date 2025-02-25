@@ -1,9 +1,7 @@
-// src/components/ui/atoms/SearchBar/SearchBar.tsx
-
 import { useState, useCallback } from "react";
-import { Input } from "../Input";
-import { IconButton } from "../IconButton";
-import { DropdownButton } from "../Dropdown";
+import { Input } from "../../atoms/Input";
+import { IconButton } from "../../atoms/IconButton";
+import { DropdownButton } from "../../atoms/Dropdown";
 import { FilterIcon, SearchIcon, XIcon } from "../../icons";
 
 export interface SearchBarProps {
