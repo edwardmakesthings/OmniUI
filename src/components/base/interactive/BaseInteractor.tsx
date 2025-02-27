@@ -9,6 +9,7 @@ import {
     useInteractiveStyles,
     useInteractiveBindings,
 } from "./hooks";
+import { useTheme } from "@/contexts/ThemeContext";
 
 /**
  * Base interactive component that provides state management, event handling,
@@ -64,6 +65,9 @@ export const BaseInteractor = <T extends string = string>({
     // Remaining props
     ...props
 }: BaseInteractorProps<T>) => {
+    // Get theme from context
+    const { currentTheme } = useTheme();
+
     // Create ref for the root element
     const internalRef = useRef<HTMLElement>(null);
     const elementRef = externalRef || internalRef;

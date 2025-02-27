@@ -22,3 +22,18 @@ export const FilterFilledIcon = createIconComponent(
     </>,
     { setFillColor: true }
 );
+
+export const FileIcon = createIconComponent(
+    <>
+        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+        <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" />
+    </>,
+    { setStrokeColor: true, strokeLinecap: "round" }
+);
+
+export const FolderIcon = createIconComponent(
+    <>
+        <path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2" />
+    </>,
+    { setStrokeColor: true, strokeLinecap: "round" }
+);

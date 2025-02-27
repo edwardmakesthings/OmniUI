@@ -137,7 +137,8 @@ export const styleComputation = {
      */
     computeAll<T extends string>(
         defaultStyles: StyleVariants<T> | Record<string, Record<string, ComputedElementStyle>>,
-        props: StyleProps<T>
+        props: StyleProps<T>,
+        theme?: Theme
     ): ComputedStyles<T> {
         const variant = props.variant || 'default';
         const baseStyles = defaultStyles[variant] || {} as StyledElements<T>;
@@ -162,14 +163,14 @@ export const styleComputation = {
             const isComputed = baseStyle && this.isComputedStyle(baseStyle);
             const computedBase = isComputed
                 ? baseStyle as ComputedElementStyle
-                : this.computeElement(baseStyle as ElementStyle, props.theme);
+                : this.computeElement(baseStyle as ElementStyle, theme);
 
             result[elementKey] = styleUtils.deepMerge(
                 styleUtils.deepMerge(
                     computedBase,
-                    themeStyle ? this.computeElement(themeStyle, props.theme) : {}
+                    themeStyle ? this.computeElement(themeStyle, theme) : {}
                 ),
-                overrideStyle ? this.computeElement(overrideStyle, props.theme) : {}
+                overrideStyle ? this.computeElement(overrideStyle, theme) : {}
             );
         });
 

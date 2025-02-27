@@ -4,6 +4,7 @@ import { StylePreset } from '@/components/base/style/presets/types';
 import { StyleProps } from '@/components/base/style/types';
 import { combineComputedStyles, computeStyles } from '@/components/base/style/utils';
 import { ElementConfig } from '@/components/base/interactive/elementConfigs/types';
+import { Theme } from '@/components/base/style/theme/types';
 
 /**
  * Hook to compute styles for interactive elements
@@ -16,6 +17,7 @@ export function useInteractiveStyles<T extends string = string>({
     styleElements = ['root'] as T[],
     elementState,
     className,
+    theme,
 }: {
     elementConfig?: ElementConfig<any>;
     stylePreset?: StylePreset<T>;
@@ -23,6 +25,7 @@ export function useInteractiveStyles<T extends string = string>({
     styleElements?: T[];
     elementState: BaseState;
     className?: string;
+    theme?: Theme;
 }) {
     // Determine which styles to use (preset or element config defaults)
     const defaultStyles = useMemo(() => {
@@ -35,9 +38,10 @@ export function useInteractiveStyles<T extends string = string>({
     const computedStyles = useMemo(() => {
         return computeStyles(
             defaultStyles,
-            styleProps || { variant: 'default' }
+            styleProps || { variant: 'default' },
+            theme
         );
-    }, [defaultStyles, styleProps]);
+    }, [defaultStyles, styleProps, theme]);
 
     // Create combined styles for each element, incorporating state
     const combinedStyles = useMemo(() => {
@@ -58,7 +62,7 @@ export function useInteractiveStyles<T extends string = string>({
                 ),
             };
         }, {} as Record<string, string>);
-    }, [computedStyles, elementState, className]);
+    }, [computedStyles, elementState, className, theme]);
 
     return { combinedStyles };
 }

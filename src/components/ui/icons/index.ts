@@ -4,4 +4,5 @@ export * from './navigation';
 export * from './actions';
 export * from './editor';
 export * from './components';
+export * from './componentsSimple';
 export * from './panels';

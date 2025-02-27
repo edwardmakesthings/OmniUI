@@ -1,15 +1,17 @@
-import { ReactNode, useCallback, useState } from "react";
+import { ComponentType, ReactNode, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import { IconButton, IconButtonProps } from "../../atoms/IconButton";
 import { PushButton, PushButtonProps } from "../../atoms/PushButton";
+import { IconProps } from "@/lib/icons/types";
+import { EntityId } from "@/core/types/EntityTypes";
 
 export type ButtonType = "icon" | "push";
 
 export interface ButtonStripItem {
-    id: string;
+    id: EntityId;
     type?: ButtonType;
     label?: ReactNode;
-    icon?: ReactNode;
+    icon?: ComponentType<IconProps> | ReactNode;
     tooltip?: string;
     disabled?: boolean;
     // Pass-through props

@@ -16,7 +16,7 @@ const baseStyles = composeStyles(
     borderStyles.accent.all,
     shapeStyles.rounded.md,
     transitionStyles.transform,
-    'fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
+    'fixed z-100 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'
 );
 
 // Header styles
@@ -45,7 +45,7 @@ const footerStyles = composeStyles(
 const backdropStyles = composeStyles(
     'fixed inset-0 bg-black/50',
     'transition-opacity duration-300',
-    'z-40 w-screen h-screen'
+    'z-80 w-screen h-screen'
 );
 
 export const modalPreset: StylePreset<'backdrop' | 'header' | 'content' | 'footer'> = {
