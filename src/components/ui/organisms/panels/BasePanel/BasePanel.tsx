@@ -50,7 +50,7 @@ const BasePanel = ({
     const baseClasses = "bg-bg-dark text-font-dark border-accent-dark-neutral";
 
     const positionClasses = {
-        [PanelPositionValues.Left]: "border-r-3",
+        [PanelPositionValues.Left]: "border-r-3 col-start-2",
         [PanelPositionValues.Right]: "border-l-3",
         [PanelPositionValues.Bottom]: "border-t-3",
     };
@@ -63,28 +63,29 @@ const BasePanel = ({
 
     const layoutStyle: React.CSSProperties = config.isFloating
         ? {
-              position: "absolute",
               left: config.floatPosition?.x.value,
               top: config.floatPosition?.y.value,
               width: pixelFloatSize?.width.value,
               height: pixelFloatSize?.height.value,
           }
         : {
-              position: "relative",
               [config.position === PanelPositionValues.Bottom
                   ? "height"
                   : "width"]: pixelSize.value,
           };
 
     const stretchClass =
-        config.position === PanelPositionValues.Bottom ? "w-full" : "h-full";
+        config.position === PanelPositionValues.Bottom
+            ? "w-screen"
+            : "h-screen";
 
     return (
         <div
             className={`${baseClasses} ${
                 positionClasses[config.position]
             } ${stretchClass} ${className}`}
-            style={layoutStyle}>
+            style={layoutStyle}
+        >
             {/* Add project header if left panel */}
             {position === PanelPositionValues.Left && <ProjectHeader />}
             {children}
