@@ -2,12 +2,14 @@ import { BaseDefinition } from './BaseDefinition';
 import { ComponentConfig } from './ComponentConfig';
 import { EntityId } from '../types/EntityTypes';
 import { BaseState } from '@/components/base/interactive/types';
+import { ComponentType } from '../types/ComponentTypes';
 
 /**
  * Instance of a component in a layout
  */
 export interface ComponentInstance extends BaseDefinition {
     definitionId: EntityId;
+    type: ComponentType;
     overrides: Partial<ComponentConfig>;
     state: BaseState;
     internalBindings: Record<string, BindingConfig>;

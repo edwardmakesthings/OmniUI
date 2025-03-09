@@ -1,3 +1,4 @@
+import { XYPosition } from "@xyflow/react";
 import { Measurement, MeasurementUtils, UnitType, ConversionContext } from "./Measurement";
 
 /**
@@ -213,6 +214,30 @@ export const PositionUtils = {
         // If the value is a position, return it
         return value;
     },
+
+    /**
+     * Converts a Position object to a XYPosition object, which is a simple object
+     * with x and y properties containing the coordinates of the position in pixels.
+     *
+     * @param position The Position object to convert
+     * @returns A XYPosition object with x and y coordinates in pixels
+     */
+    toXYPosition(position: Position): XYPosition {
+        // Convert the position to pixels
+        position = this.convert(position, 'px');
+        return { x: position.x.value, y: position.y.value };
+    },
+
+    /**
+     * Converts a XYPosition object to a Position object, which is a more abstract representation
+     * of a 2D position that can be converted to different units.
+     *
+     * @param position The XYPosition object to convert
+     * @returns A Position object with x and y coordinates in pixels
+     */
+    fromXYPosition(position: XYPosition): Position {
+        return { x: MeasurementUtils.create(position.x, 'px'), y: MeasurementUtils.create(position.y, 'px') };
+    }
 };
 
 /**
@@ -230,7 +255,7 @@ export interface Size extends MeasurementVector {
  * - Size: used directly
  * - null/undefined: allows for optional values
  */
-export type SizeValue = number | Measurement | Size | undefined | null;
+export type SizeValue = number | number[] | Measurement | Size | undefined | null;
 
 /**
  * Size-specific utilities that extend vector utils
@@ -340,6 +365,11 @@ export const SizeUtils = {
         // If the value is a number, treat it as pixels
         if (typeof value === 'number') {
             return this.uniform(value, 'px');
+        }
+
+        // If the value is an array of numbers, treat them as pixels
+        if (Array.isArray(value)) {
+            return this.create(MeasurementUtils.create(value[0], 'px'), MeasurementUtils.create(value[1], 'px'));
         }
 
         // If the value is a measurement, create a uniform size

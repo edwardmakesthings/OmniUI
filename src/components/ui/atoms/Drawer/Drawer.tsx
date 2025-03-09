@@ -115,7 +115,7 @@ export const Drawer = ({
     // Render function for the drawer
     const renderDrawer = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA

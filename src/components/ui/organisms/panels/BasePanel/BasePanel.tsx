@@ -3,12 +3,13 @@ import { SizeUtils } from "@/core/types/Geometry";
 import { MeasurementUtils } from "@/core/types/Measurement";
 import { PanelName, usePanelConfig } from "@/store/uiStore";
 import { ProjectHeader } from "@/components/ui/atoms";
+import { ReactNode } from "react";
 
 interface BasePanelProps extends PanelConfig {
     /** Panel identifier matching PANEL_IDS in uiStore */
     panelName: PanelName;
     /** Panel content */
-    children: React.ReactNode;
+    children?: ReactNode;
     /** Additional CSS classes */
     className?: string;
 }
@@ -87,7 +88,7 @@ const BasePanel = ({
             style={layoutStyle}
         >
             {/* Add project header if left panel */}
-            {position === PanelPositionValues.Left && <ProjectHeader />}
+            {config.position === PanelPositionValues.Left && <ProjectHeader />}
             {children}
         </div>
     );

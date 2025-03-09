@@ -8,6 +8,14 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
+body,
+#root {
+    min-width: 100vw;
+    min-height: 100vh;
+    width: fit-content;
+    height: fit-content;
+}
+
 @theme {
     --font-sans: "Nunito Sans", system-ui, Avenir, Helvetica, Arial, sans-serif;
 
@@ -27,8 +35,8 @@
 
     /* Light theme colors (for future use) */
     --color-bg-light: #f9f9f9;
-    --color-bg-light-lighter: #2a2a2a;
-    --color-bg-light-darker: #1a1a1a;
+    --color-bg-light-lighter: #ffffff;
+    --color-bg-light-darker: #e5e5e5;
 
     --color-font-light: #242424;
     --color-font-light-muted: #666666;

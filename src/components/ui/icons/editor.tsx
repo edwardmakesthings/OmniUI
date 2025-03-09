@@ -47,8 +47,8 @@ export const AlignCenterIcon = createIconComponent(
 export const AlignRightIcon = createIconComponent(
     <>
         <path d="M4 6l16 0" />
-        <path d="M10 12l6 0" />
-        <path d="M4 18l16 0" />
+        <path d="M10 12l10 0" />
+        <path d="M6 18l14 0" />
     </>,
     { setStrokeColor: true, strokeLinecap: "round" }
 );

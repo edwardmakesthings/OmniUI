@@ -19,7 +19,7 @@ const listStyles = composeStyles(
 
 // Individual tab styles
 const tabStyles = composeStyles(
-    layoutStyles.flex.row.center,
+    layoutStyles.flex.row.centerFull,
     layoutStyles.spacing.pad.md,
     transitionStyles.colors,
     stateStyles.interactive.base,
@@ -44,7 +44,7 @@ export const tabsPreset: StylePreset<'list' | 'tab' | 'panel'> = {
                 layoutStyles.flex.col.base,
                 backgroundStyles.solid.dark,
                 'relative',
-                editingStyles.default
+                editingStyles.default,
             ),
             list: listStyles,
             tab: composeStyles(

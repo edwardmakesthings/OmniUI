@@ -1,13 +1,16 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { shallow } from 'zustand/shallow';
 import { ComponentState } from './types';
-import { ComponentDefinition } from '../core/base/ComponentDefinition';
-import { BindingConfig, ComponentInstance, ComponentInstanceState, ExternalBindingConfig } from '../core/base/ComponentInstance';
-import { createEntityId, EntityId } from '../core/types/EntityTypes';
-import { StoreError, StoreErrorCodes } from '../core/base/StoreError';
-import { ComponentType } from '../core/types/ComponentTypes';
+import { ComponentDefinition } from '@/core/base/ComponentDefinition';
+import { BindingConfig, ComponentInstance, ComponentInstanceState, ExternalBindingConfig } from '@/core/base/ComponentInstance';
+import { createEntityId, EntityId } from '@/core/types/EntityTypes';
+import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
+import { ComponentType } from '@/core/types/ComponentTypes';
 import { nanoid } from 'nanoid';
-import { ComponentConfig } from '../core/base/ComponentConfig';
+import { ComponentConfig } from '@/core/base/ComponentConfig';
+import { defaultState } from '@/components/base/interactive';
+import { useMemo } from 'react';
 
 interface SelectionState {
     selectedIds: Set<EntityId>;
@@ -156,19 +159,17 @@ export const useComponentStore = create<ComponentStore>()(
                     id: createEntityId(nanoid()),
                     definitionId: definitionId,
                     overrides: overrides,
-                    state: {
-                        isHovered: false,
-                        isFocused: false,
-                        isPressed: false,
-                        isActive: false,
-                        isDisabled: false
-                    },
+                    state: defaultState,
                     internalBindings: {},
                     externalBindings: {},
                     metadata: {
                         createdAt: new Date(),
                         updatedAt: new Date(),
-                        version: 1
+                        version: 1,
+                        definitionVersion: definition.metadata.definitionVersion,
+                        compatibilityVersion: definition.metadata.compatibilityVersion,
+                        createdBy: definition.metadata.createdBy,
+                        isUserComponent: definition.metadata.isUserComponent
                     }
                 };
 
@@ -412,9 +413,13 @@ export const useComponentStore = create<ComponentStore>()(
  * @returns The component definition associated with the given ID, or undefined if the ID is null.
  */
 export function useDefinition(id: EntityId | null) {
-    return useComponentStore((state) =>
-        id ? state.definitions[id] : undefined
-    );
+    // First get the definitions map
+    const definitionsMap = useComponentStore(state => state.definitions);
+    // Then memoize the lookup result
+    return useMemo(() => {
+        if (!id) return undefined;
+        return definitionsMap[id];
+    }, [definitionsMap, id]);
 }
 
 /**
@@ -424,9 +429,11 @@ export function useDefinition(id: EntityId | null) {
  * @returns The component instance associated with the given ID, or undefined if the ID is null.
  */
 export function useInstance(id: EntityId | null) {
-    return useComponentStore((state) =>
-        id ? state.instances[id] : undefined
-    );
+    const instancesMap = useComponentStore(state => state.instances);
+    return useMemo(() => {
+        if (!id) return undefined;
+        return instancesMap[id];
+    }, [instancesMap, id]);
 }
 
 //////////////////////////
@@ -439,9 +446,8 @@ export function useInstance(id: EntityId | null) {
  * @returns An array of all component definitions in the store.
  */
 export function useAllDefinitions() {
-    return useComponentStore((state) =>
-        Object.values(state.definitions)
-    );
+    const definitionsMap = useComponentStore(state => state.definitions);
+    return useMemo(() => Object.values(definitionsMap), [definitionsMap]);
 }
 
 /**
@@ -450,9 +456,8 @@ export function useAllDefinitions() {
  * @returns An array of all component instances in the store.
  */
 export function useAllInstances() {
-    return useComponentStore((state) =>
-        Object.values(state.instances)
-    );
+    const instancesMap = useComponentStore(state => state.instances);
+    return useMemo(() => Object.values(instancesMap), [instancesMap]);
 }
 
 ////////////////////////
@@ -466,11 +471,10 @@ export function useAllInstances() {
  * @returns An array of component definitions that match the given type.
  */
 export function useDefinitionsByType(type: ComponentType) {
-    return useComponentStore((state) =>
-        Object.values(state.definitions).filter(def =>
-            def.type === type
-        )
-    );
+    const definitions = useAllDefinitions();
+    return useMemo(() => {
+        return definitions.filter(def => def.type === type);
+    }, [definitions, type]);
 }
 
 /**
@@ -480,11 +484,10 @@ export function useDefinitionsByType(type: ComponentType) {
  * @returns An array of component instances that have the given definition ID.
  */
 export function useInstancesByDefinition(definitionId: EntityId) {
-    return useComponentStore((state) =>
-        Object.values(state.instances).filter(instance =>
-            instance.definitionId === definitionId
-        )
-    );
+    const instances = useAllInstances();
+    return useMemo(() => {
+        return instances.filter(instance => instance.definitionId === definitionId);
+    }, [instances, definitionId]);
 }
 
 /////////////////////
@@ -500,16 +503,16 @@ export function useInstancesByDefinition(definitionId: EntityId) {
  */
 export function useInstanceManager(id: EntityId) {
     const instance = useInstance(id);
-    const updateInstance = useComponentStore((state) => state.updateInstance);
+    const updateInstance = useComponentStore(state => state.updateInstance);
 
-    return {
+    return useMemo(() => ({
         instance,
-        update: (updates: Partial<ComponentInstance>) => {
+        update: (updates: Partial<any>) => {
             if (instance) {
                 updateInstance(id, updates);
             }
         }
-    };
+    }), [instance, updateInstance, id]);
 }
 
 /**
@@ -519,23 +522,25 @@ export function useInstanceManager(id: EntityId) {
  * @returns An object containing the retrieved instances and an update function that can be used to update all of them.
  */
 export function useMultiInstanceManager(ids: EntityId[]) {
-    const instances = useComponentStore((state) =>
-        ids.map(id => state.instances[id]).filter(Boolean)
-    );
-    const updateInstance = useComponentStore((state) => state.updateInstance);
-    const getState = useComponentStore.getState;
+    const instancesMap = useComponentStore(state => state.instances);
+    const updateInstance = useComponentStore(state => state.updateInstance);
 
-    return {
-        instances,
-        updateAll: (updates: Partial<ComponentInstance>) => {
-            const currentState = getState()
-            ids.forEach(id => {
-                if (currentState.instances[id]) {
-                    updateInstance(id, updates);
-                }
-            });
-        }
-    };
+    return useMemo(() => {
+        const filteredInstances = ids
+            .map(id => instancesMap[id])
+            .filter(Boolean);
+
+        return {
+            instances: filteredInstances,
+            updateAll: (updates: Partial<any>) => {
+                ids.forEach(id => {
+                    if (instancesMap[id]) {
+                        updateInstance(id, updates);
+                    }
+                });
+            }
+        };
+    }, [instancesMap, updateInstance, ids]);
 }
 
 
@@ -548,9 +553,13 @@ export function useMultiInstanceManager(ids: EntityId[]) {
  * - `createFromDefinition(definition: ComponentDefinition)`: Creates a new component instance from an existing definition in the store.
  */
 export function useComponentCreation() {
-    return {
-        createDefinition: useComponentStore((state) => state.addDefinition),
-        createInstance: useComponentStore((state) => state.addInstance),
-        createFromDefinition: useComponentStore((state) => state.createFromDefinition)
-    };
+    const addDefinition = useComponentStore(state => state.addDefinition);
+    const addInstance = useComponentStore(state => state.addInstance);
+    const createFromDefinition = useComponentStore(state => state.createFromDefinition);
+
+    return useMemo(() => ({
+        createDefinition: addDefinition,
+        createInstance: addInstance,
+        createFromDefinition
+    }), [addDefinition, addInstance, createFromDefinition]);
 }
