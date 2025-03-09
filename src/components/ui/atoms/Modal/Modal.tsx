@@ -115,7 +115,7 @@ export const Modal = ({
     // Render function for the modal
     const renderModal = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA

@@ -45,7 +45,7 @@ export const Panel = ({
     // Render function for the panel
     const renderPanel = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA
