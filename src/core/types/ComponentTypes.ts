@@ -3,11 +3,20 @@
  * and consistent string values
  */
 export const ComponentTypeValues = {
+    Drawer: 'Drawer',
+    Dropdown: 'Dropdown',
+    DropdownPanel: 'DropdownPanel',
+    IconButton: 'IconButton',
+    Input: 'Input',
+    Label: 'Label',
+    ListView: 'ListView',
+    Modal: 'Modal',
     Panel: 'Panel',
+    PushButton: 'PushButton',
     ScrollBox: 'ScrollBox',
-    Button: 'Button',
-    TextInput: 'TextInput',
-    Label: 'Label'
+    Tabs: 'Tabs',
+    Tooltip: 'Tooltip',
+    TreeView: 'TreeView',
 } as const;
 
 export type ComponentType = typeof ComponentTypeValues[keyof typeof ComponentTypeValues];
