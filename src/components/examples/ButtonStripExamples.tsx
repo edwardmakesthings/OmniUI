@@ -19,7 +19,7 @@ import {
 
 export const ButtonStripExamples = () => {
     return (
-        <div className="space-y-6">
+        <div className="flex gap-2 flex-wrap">
             {/* IconButton with states */}
             <IconButton
                 icon={<BellIcon />}

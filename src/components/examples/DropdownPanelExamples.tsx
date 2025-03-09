@@ -85,7 +85,7 @@ export const ComponentPaletteExample = ({ searchQuery = "" }) => {
         !showContainers && !showButtons && !showInputs && searchQuery;
 
     return (
-        <div className="w-full bg-bg-dark">
+        <div className="w-96 bg-bg-dark">
             {noResults && (
                 <div className="p-4 text-center text-font-dark-muted">
                     No components found matching "{searchQuery}"
@@ -158,11 +158,12 @@ export const ComponentPaletteWithTabs = () => {
     const [searchQuery, setSearchQuery] = useState("");
 
     return (
-        <div className="w-80 bg-bg-dark border-r border-accent-dark-neutral h-full flex flex-col">
+        <div className="w-128 bg-bg-dark border-r border-accent-dark-neutral h-full flex flex-col">
             {/* Use Tabs component for Atoms/Molecules */}
             <Tabs
                 variant="default"
                 className="w-full"
+                tabClassName="flex-1"
                 tabs={[
                     {
                         id: "atoms",
@@ -230,7 +231,7 @@ const PropertyRow = ({
 
 export const PropertyPanelExample = () => {
     return (
-        <div className="w-80 h-screen bg-bg-dark border-l border-accent-dark-neutral">
+        <div className="w-96 h-screen bg-bg-dark border-l border-accent-dark-neutral">
             {/* Header with component name */}
             <div className="p-2 border-b border-accent-dark-neutral">
                 <h2 className="text-lg font-medium">PanelName</h2>
@@ -483,7 +484,7 @@ export const PropertyPanelExample = () => {
 
 const DropdownPanelExamples = () => {
     return (
-        <div className="space-y-6">
+        <div className="flex flex-row space-x-6">
             <ComponentPaletteExample />
             <ComponentPaletteWithTabs />
             <PropertyPanelExample />
