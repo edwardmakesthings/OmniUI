@@ -5,9 +5,32 @@ import ComponentThumbnail from "@/components/ui/molecules/ComponentThumbnail/Com
 import { ComponentDefinition } from "@/core/base/ComponentDefinition";
 import { useMemo } from "react";
 import { DropdownPanel } from "@/components/ui/atoms";
+import { useComponents } from "@/registry";
+
+// function ComponentThumbnail({ component }: { component: ComponentDefinition }) {
+//     // Use the drag hook
+//     const { dragProps, isDragging } = useComponentPanelDrag(
+//         component.id,
+//         component.type,
+//         component.label
+//     );
+
+//     return (
+//         <div
+//             {...dragProps}
+//             className={`component-thumbnail ${isDragging ? "dragging" : ""}`}
+//         >
+//             {component.label}
+//         </div>
+//     );
+// }
 
 export const ComponentPanel = () => {
     const componentPaletteConfig = usePanelConfig("COMPONENT_PALETTE");
+    const { definitions, getDefinitionsByType } = useComponents();
+
+    const layoutComponents = getDefinitionsByType("Panel");
+    const controlComponents = getDefinitionsByType("PushButton");
 
     // Get all available components from store
     // Use useMemo to prevent re-renders causing store updates
@@ -41,21 +64,21 @@ export const ComponentPanel = () => {
     };
 
     // Use useMemo for derived data to prevent unnecessary recalculations
-    const layoutComponents = useMemo(() => {
-        return components.filter(
-            (comp) => comp.type === "Panel" || comp.type === "ScrollBox"
-        );
-    }, [components]);
+    // const layoutComponents = useMemo(() => {
+    //     return components.filter(
+    //         (comp) => comp.type === "Panel" || comp.type === "ScrollBox"
+    //     );
+    // }, [components]);
 
-    const controlComponents = useMemo(() => {
-        return components.filter(
-            (comp) => comp.type === "PushButton" || comp.type === "Input"
-        );
-    }, [components]);
+    // const controlComponents = useMemo(() => {
+    //     return components.filter(
+    //         (comp) => comp.type === "PushButton" || comp.type === "Input"
+    //     );
+    // }, [components]);
 
-    const displayComponents = useMemo(() => {
-        return components.filter((comp) => comp.type === "Label");
-    }, [components]);
+    // const displayComponents = useMemo(() => {
+    //     return components.filter((comp) => comp.type === "Label");
+    // }, [components]);
 
     return (
         <BasePanel {...componentPaletteConfig}>
@@ -94,7 +117,7 @@ export const ComponentPanel = () => {
             </DropdownPanel>
 
             {/* Display Components */}
-            <DropdownPanel
+            {/* <DropdownPanel
                 title="Display"
                 defaultOpen={true}
                 contentLayout="grid"
@@ -106,7 +129,7 @@ export const ComponentPanel = () => {
                         onDragStart={handleDragStart}
                     />
                 ))}
-            </DropdownPanel>
+            </DropdownPanel> */}
         </BasePanel>
     );
 };

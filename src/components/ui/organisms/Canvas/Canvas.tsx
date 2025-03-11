@@ -55,7 +55,7 @@ export const Canvas = () => {
     const updateNodesFromWidgets = useCallback(() => {
         // Use the convertToNodes method to get properly formatted nodes
         const formattedNodes = widgetStore.convertToNodes();
-        console.log("Setting nodes:", formattedNodes);
+        // console.log("Setting nodes:", formattedNodes);
         setNodes(formattedNodes);
     }, [widgetStore, setNodes]);
 

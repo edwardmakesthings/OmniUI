@@ -14,6 +14,7 @@ import {
     CompPushButtonIcon,
     CompMenuDropdownIcon,
 } from "@/components/ui/icons";
+import { useComponentPanelDrag } from "@/core";
 
 export interface ComponentThumbnailProps {
     component: ComponentDefinition;
@@ -34,15 +35,21 @@ export const ComponentThumbnail = ({
     // Get appropriate icon based on component type
     const IconComponent = getComponentIcon(component.type);
 
-    // Handle drag start
-    const handleDragStart = (e: React.DragEvent) => {
-        e.currentTarget.setAttribute("draggable", "true");
+    const { dragProps, isDragging } = useComponentPanelDrag(
+        component.id,
+        component.type,
+        component.label
+    );
 
-        // Call custom handler if provided
-        if (onDragStart) {
-            onDragStart(e, component);
-        }
-    };
+    // Handle drag start
+    // const handleDragStart = (e: React.DragEvent) => {
+    //     e.currentTarget.setAttribute("draggable", "true");
+
+    //     // Call custom handler if provided
+    //     if (onDragStart) {
+    //         onDragStart(e, component);
+    //     }
+    // };
 
     const thumbnailStyles = composeStyles(
         backgroundStyles.solid.dark,
@@ -53,9 +60,12 @@ export const ComponentThumbnail = ({
 
     return (
         <div
-            className={cn(thumbnailStyles, className)}
-            draggable={true}
-            onDragStart={handleDragStart}
+            {...dragProps}
+            className={cn(
+                thumbnailStyles,
+                className,
+                `component-thumbnail ${isDragging ? "dragging" : ""}`
+            )}
             data-component-id={component.id}
             data-component-type={component.type}
         >

@@ -6,13 +6,13 @@ import {
     ThemePanel,
 } from "@/components/ui/organisms/panels";
 import { IconColumn } from "../molecules/IconColumn";
-import { Grid } from "../atoms/Grid";
 import { ModalProvider } from "@/contexts/ModalContext";
 import ModalContainer from "@/components/ui/modals/ModalContainer";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { useComponentRegistry } from "@/registry/componentRegistry";
+import { initializeComponentRegistry } from "@/registry/componentRegistry";
 import { Canvas } from "@/components/ui/organisms/Canvas";
 import ContainerExamples from "@/components/examples/CombinedExamples";
+import { initializeCoreSystem } from "@/core";
 
 /**
  * Main application shell that manages the layout and positioning of panels
@@ -20,17 +20,18 @@ import ContainerExamples from "@/components/examples/CombinedExamples";
  */
 
 const WebAppShell: React.FC = () => {
-    const { initializeDefaults } = useComponentRegistry();
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Initialize component registry on mount
     // Use a state flag to ensure initialization only happens once
     useEffect(() => {
         if (!isInitialized) {
-            initializeDefaults();
+            initializeCoreSystem();
             setIsInitialized(true);
         }
-    }, [isInitialized, initializeDefaults]);
+    }, [isInitialized, initializeComponentRegistry]);
+
+    useEffect(() => {}, []);
 
     return (
         <ThemeProvider defaultTheme="dark">
