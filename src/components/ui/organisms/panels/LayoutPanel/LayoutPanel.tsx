@@ -2,29 +2,14 @@ import { BasePanel } from "../BasePanel";
 import { usePanelConfig } from "@/store/uiStore";
 import { TreeView, TreeItem } from "@/components/ui/atoms/TreeView";
 import { useWidgetStore } from "@/store/widgetStore";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityId } from "@/core/types/EntityTypes";
-import {
-    PanelIcon,
-    InputIcon,
-    ButtonIcon,
-    WidgetIcon,
-} from "@/components/ui/icons";
-import { IconProps } from "@/lib/icons/types";
-
-// Map component types to icons
-const componentIconMap: Record<string, React.FC<IconProps>> = {
-    Widget: WidgetIcon,
-    Panel: PanelIcon,
-    ScrollBox: PanelIcon,
-    PushButton: ButtonIcon,
-    Input: InputIcon,
-    Label: InputIcon,
-    // Add more mappings as needed
-};
+import { WidgetIcon } from "@/components/ui/icons";
+import { componentIconMap } from "@/registry/componentRenderers";
+import { PushButton } from "@/components/ui/atoms";
+import { notifyWidgetChange } from "@/core/eventBus/widgetEvents";
 
 // Default icon for types not in the map
-const DefaultComponentIcon = PanelIcon;
 
 const LayoutPanel = () => {
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
@@ -34,55 +19,166 @@ const LayoutPanel = () => {
     // State for tracking selected items
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [expandedIds, setExpandedIds] = useState<string[]>([]);
+    const [forceRender, setForceRender] = useState(0);
+
+    // Track initial expansion
+    const initialExpansionRef = useRef(false);
+
+    // Make the layout hierarchy store globally available for cross-component access
+    useEffect(() => {
+        // Create a global reference to this component's functionality
+        window._layoutHierarchyStore = {
+            selectItem: (id: string) => {
+                setSelectedIds([id]);
+            },
+            getSelectedItems: () => selectedIds,
+            refreshView: () => setForceRender((prev) => prev + 1),
+        };
+
+        return () => {
+            delete window._layoutHierarchyStore;
+        };
+    }, [selectedIds]);
+
+    // Mark this panel for targeting from events
+    useEffect(() => {
+        const panelElement = document.querySelector(".layout-hierarchy-panel");
+        if (panelElement) {
+            panelElement.setAttribute("data-panel-id", "layout-hierarchy");
+        }
+    }, []);
+
+    // Only expand widgets on initial render
+    useEffect(() => {
+        if (initialExpansionRef.current) return;
+        initialExpansionRef.current = true;
+
+        if (widgets.length > 0) {
+            const widgetIds = widgets.map((w) => w.id);
+            setExpandedIds(widgetIds);
+        }
+    }, []);
+
+    // Create an event listener for widget updates
+    useEffect(() => {
+        const handleWidgetUpdate = (e: Event) => {
+            // Safely cast to CustomEvent
+            const customEvent = e as CustomEvent;
+            console.log("Layout panel received event:", customEvent.detail);
+
+            // Trigger a re-render
+            setForceRender((prev) => prev + 1);
+
+            // If there's a specific widget ID, we might want to auto-expand it
+            if (customEvent.detail?.widgetId) {
+                const { widgetId } = customEvent.detail;
+                // Add to expanded IDs if not already expanded
+                setExpandedIds((prev) => {
+                    if (!prev.includes(widgetId)) {
+                        return [...prev, widgetId];
+                    }
+                    return prev;
+                });
+            }
+        };
+
+        // Register this panel for events
+        import("@/core/eventBus/widgetEvents").then((module) => {
+            module.registerLayoutPanelForEvents();
+        });
+
+        // Add event listeners to multiple event types
+        document.addEventListener("widget-updated", handleWidgetUpdate);
+        document.addEventListener(
+            "component-hierarchy-changed",
+            handleWidgetUpdate
+        );
+
+        // Add directly to panel element too
+        const panel = document.querySelector(
+            '[data-panel-id="layout-hierarchy"]'
+        );
+        if (panel) {
+            panel.addEventListener("widget-updated", handleWidgetUpdate);
+            panel.addEventListener(
+                "component-hierarchy-changed",
+                handleWidgetUpdate
+            );
+        }
+
+        return () => {
+            document.removeEventListener("widget-updated", handleWidgetUpdate);
+            document.removeEventListener(
+                "component-hierarchy-changed",
+                handleWidgetUpdate
+            );
+            if (panel) {
+                panel.removeEventListener("widget-updated", handleWidgetUpdate);
+                panel.removeEventListener(
+                    "component-hierarchy-changed",
+                    handleWidgetUpdate
+                );
+            }
+        };
+    }, []);
 
     // Build tree data for widgets and their components
     const treeData = useMemo(() => {
-        return widgets.map((widget) => {
-            // Get the component hierarchy for this widget
-            const hierarchy = widgetStore.getComponentHierarchy(widget.id);
+        try {
+            return widgets.map((widget) => {
+                // Get the component hierarchy for this widget
+                const hierarchy = widgetStore.getComponentHierarchy(widget.id);
+                // The hierarchy already includes the widget as the first item
+                // Just return the first element from the hierarchy array
+                if (hierarchy.length > 0) {
+                    return hierarchy[0];
+                }
 
-            // Convert to tree format
-            return {
-                id: widget.id,
-                label: widget.label || "Widget",
-                icon: PanelIcon,
-                children: hierarchy,
-                canDrop: false, // Widgets are top-level, can't be nested
-            };
-        });
-    }, [widgets, widgetStore]);
+                // Fallback in case the hierarchy is empty
+                return {
+                    id: widget.id,
+                    label: widget.label || "Widget",
+                    icon: componentIconMap.Widget || WidgetIcon,
+                    children: [],
+                    canDrop: true,
+                    canDrag: false,
+                };
+            });
+        } catch (err) {
+            console.error("Error building tree data:", err);
+            return [];
+        }
+    }, [widgets, widgetStore, forceRender]);
 
-    // Enhanced function to handle tree item move operations
+    // Handle tree item movement
     const handleTreeMove = useCallback(
         (items) => {
-            // Extract widget ID from the first element to find which widget we're working with
             if (!items.length || !items[0].id) return;
 
-            // The first-level items are widgets, so find which one contains our moved components
-            const widgetId = items[0].id;
-            const widget = widgetStore.getWidget(widgetId as EntityId);
+            // Extract widget ID from the first element
+            const widgetId = items[0].id as EntityId;
+            const widget = widgetStore.getWidget(widgetId);
             if (!widget) return;
 
-            // Process the updated tree structure to update component hierarchy
+            // Process the updated tree structure
             const processUpdatedHierarchy = (
                 treeItems,
                 parentId = undefined
             ) => {
                 treeItems.forEach((item, index) => {
-                    // Convert tree IDs to component IDs if needed
-                    const itemParts = item.id.includes("/")
-                        ? item.id.split("/")
-                        : [widgetId, item.id];
-                    const componentId = itemParts[1] as EntityId;
-
                     // Skip widget items
-                    if (itemParts.length < 2) {
-                        // This is a widget item, process its children
+                    if (!item.id.includes("/")) {
                         if (item.children) {
                             processUpdatedHierarchy(item.children);
                         }
                         return;
                     }
+
+                    // Extract component ID from combined ID (format: widgetId/componentId)
+                    const [, componentId] = item.id.split("/") as [
+                        string,
+                        EntityId
+                    ];
 
                     // Find the component in the widget
                     const component = widget.components.find(
@@ -90,22 +186,21 @@ const LayoutPanel = () => {
                     );
                     if (!component) return;
 
-                    // If parent changed, update the widget store
-                    if (component.parentId !== parentId) {
-                        console.log(
-                            `Moving component ${componentId} to parent ${
-                                parentId || "ROOT"
-                            }`
-                        );
+                    // Update parent and z-index if needed
+                    if (
+                        component.parentId !== parentId ||
+                        component.zIndex !== index
+                    ) {
+                        // Move component to new parent if needed
+                        if (component.parentId !== parentId) {
+                            widgetStore.moveComponent(
+                                widgetId,
+                                componentId,
+                                parentId
+                            );
+                        }
 
-                        // Use the moveComponent function from widget store
-                        widgetStore.moveComponent(
-                            widgetId,
-                            componentId,
-                            parentId
-                        );
-
-                        // Update zIndex to match the order in the tree
+                        // Update z-index to match tree order
                         widgetStore.updateComponent(widgetId, componentId, {
                             zIndex: index,
                         });
@@ -118,8 +213,11 @@ const LayoutPanel = () => {
                 });
             };
 
-            // Start processing from the root
+            // Start processing from root
             processUpdatedHierarchy(items);
+
+            // Notify about hierarchy changes
+            notifyWidgetChange(widgetId, "hierarchyChanged");
         },
         [widgetStore]
     );
@@ -129,26 +227,48 @@ const LayoutPanel = () => {
         (ids: string[]) => {
             setSelectedIds(ids);
 
-            // If a component is selected, focus the widget and select the component
-            if (ids.length === 1) {
+            // If a component is selected (format: widget-123/component-456)
+            if (ids.length === 1 && ids[0].includes("/")) {
                 // Extract widget and component IDs (format: widget-123/component-456)
-                const parts = ids[0].split("/");
-                if (parts.length === 2) {
-                    const widgetId = parts[0];
-                    const componentId = parts[1];
+                const [widgetId, componentId] = ids[0].split("/") as [
+                    EntityId,
+                    EntityId
+                ];
 
-                    // Focus the widget and select the component
-                    widgetStore.setActiveWidget(widgetId as EntityId);
-                    // If you have a selection mechanism in widgets:
-                    // widgetStore.selectComponent(widgetId as EntityId, componentId as EntityId);
+                // Find the component instance and select it
+                const widget = widgetStore.getWidget(widgetId);
+                if (widget) {
+                    const component = widget.components.find(
+                        (c) => c.id === componentId
+                    );
+                    if (component) {
+                        // Focus the widget and select the component in UI
+                        widgetStore.setActiveWidget(widgetId);
+
+                        // Find the component in DOM and trigger selection
+                        const componentEl = document.querySelector(
+                            `[data-widget-id="${widgetId}"] [data-component-id="${componentId}"]`
+                        );
+                        if (componentEl) {
+                            (componentEl as HTMLElement).click();
+                        }
+                    }
                 }
             }
         },
         [widgetStore]
     );
 
+    // Manual refresh button handler
+    const handleManualRefresh = useCallback(() => {
+        setForceRender((prev) => prev + 1);
+    }, []);
+
     return (
-        <BasePanel {...layoutHierarchyConfig}>
+        <BasePanel
+            {...layoutHierarchyConfig}
+            className="layout-hierarchy-panel"
+        >
             <h2 className="text-lg font-bold p-3 border-b border-accent-dark-neutral">
                 Layout Hierarchy
             </h2>
@@ -158,18 +278,40 @@ const LayoutPanel = () => {
                     No widgets available
                 </div>
             ) : (
-                <TreeView
-                    items={treeData}
-                    selectedIds={selectedIds}
-                    expandedIds={expandedIds}
-                    onSelectionChange={handleSelectionChange}
-                    onExpansionChange={setExpandedIds}
-                    onMove={handleTreeMove}
-                    maxHeight="calc(100vh - 60px)"
-                />
+                <>
+                    <div className="p-2 flex justify-end">
+                        <PushButton
+                            onClick={handleManualRefresh}
+                            variant="ghost"
+                            className="text-xs"
+                        >
+                            Refresh
+                        </PushButton>
+                    </div>
+                    <TreeView
+                        items={treeData}
+                        selectedIds={selectedIds}
+                        expandedIds={expandedIds}
+                        onSelectionChange={handleSelectionChange}
+                        onExpansionChange={setExpandedIds}
+                        onMove={handleTreeMove}
+                        maxHeight="calc(100vh - 60px)"
+                    />
+                </>
             )}
         </BasePanel>
     );
 };
+
+// Add global type definition for layout hierarchy store
+declare global {
+    interface Window {
+        _layoutHierarchyStore?: {
+            selectItem: (id: string) => void;
+            getSelectedItems: () => string[];
+            refreshView: () => void;
+        };
+    }
+}
 
 export default LayoutPanel;

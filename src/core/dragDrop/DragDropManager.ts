@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect, useMemo } from 'react';
 
 // Drag source information
 export interface DragSource {
@@ -49,93 +49,122 @@ interface DragDropState {
 }
 
 // Create the drag-drop store
-export const useDragDrop = create<DragDropState>((set, get) => ({
-    isDragging: false,
-    dragSource: null,
-    dragData: null,
-    dropTargets: [],
-    activeDropTarget: null,
-    dropIndicators: [],
+export const useDragDrop = create<DragDropState>((set, get) => {
+    const registeredTargets = new Set();
 
-    startDrag: (source) => {
-        console.log(`Starting drag: ${source.type}/${source.id}`);
-        set({
-            isDragging: true,
-            dragSource: source,
-            dragData: source.data
-        });
-    },
+    return {
+        isDragging: false,
+        dragSource: null,
+        dragData: null,
+        dropTargets: [],
+        activeDropTarget: null,
+        dropIndicators: [],
 
-    endDrag: () => {
-        console.log('Ending drag');
-        set({
-            isDragging: false,
-            dragSource: null,
-            dragData: null,
-            activeDropTarget: null
-        });
-        get().clearDropIndicators();
-    },
+        startDrag: (source) => {
+            console.log(`Starting drag: ${source.type}/${source.id}`);
+            set({
+                isDragging: true,
+                dragSource: source,
+                dragData: source.data
+            });
+        },
 
-    registerDropTarget: (target) => {
-        console.log(`Registering drop target: ${target.type}/${target.id}`);
-        set(state => ({
-            dropTargets: [...state.dropTargets.filter(t => t.id !== target.id), target]
-        }));
-    },
+        endDrag: () => {
+            console.log('Ending drag');
+            set({
+                isDragging: false,
+                dragSource: null,
+                dragData: null,
+                activeDropTarget: null
+            });
+            get().clearDropIndicators();
+        },
 
-    unregisterDropTarget: (id) => {
-        set(state => ({
-            dropTargets: state.dropTargets.filter(t => t.id !== id)
-        }));
-    },
+        registerDropTarget: (target) => {
+            const targetId = target.id;
 
-    setActiveDropTarget: (id) => {
-        const target = id ? get().dropTargets.find(t => t.id === id) : null;
-        set({ activeDropTarget: target || null });
-    },
-
-    addDropIndicator: (indicator) => {
-        set(state => ({
-            dropIndicators: [...state.dropIndicators, indicator]
-        }));
-    },
-
-    clearDropIndicators: () => {
-        // Remove DOM elements
-        get().dropIndicators.forEach(indicator => {
-            if (indicator.element) {
-                indicator.element.remove();
+            // Skip registration if target is already registered
+            if (registeredTargets.has(targetId)) {
+                return;
             }
-        });
 
-        set({ dropIndicators: [] });
-    },
+            // Mark as registered before state update
+            registeredTargets.add(targetId);
 
-    handleDrop: (e, targetId) => {
-        const { dragSource, dropTargets } = get();
-        if (!dragSource) return false;
+            console.log(`Registering drop target: ${target.type}/${target.id}`);
+            set(state => ({
+                dropTargets: [...state.dropTargets.filter(t => t.id !== target.id), target]
+            }));
+        },
 
-        const target = dropTargets.find(t => t.id === targetId);
-        if (!target) return false;
+        unregisterDropTarget: (id) => {
+            // Skip unregistration if target is not registered
+            if (!registeredTargets.has(id)) {
+                return;
+            }
 
-        // Check if target accepts this drag type
-        if (!target.accepts.includes(dragSource.type)) {
-            console.log(`Drop target ${targetId} does not accept ${dragSource.type}`);
-            return false;
+            // Remove from registry before state update
+            registeredTargets.delete(id);
+
+            // Only update state if actually needed
+            set(state => {
+                // Check if target exists in state before updating
+                const targetExists = state.dropTargets.some(t => t.id === id);
+                if (!targetExists) return state; // No change needed
+
+                return {
+                    dropTargets: state.dropTargets.filter(t => t.id !== id)
+                };
+            });
+        },
+
+        setActiveDropTarget: (id) => {
+            const target = id ? get().dropTargets.find(t => t.id === id) : null;
+            set({ activeDropTarget: target || null });
+        },
+
+        addDropIndicator: (indicator) => {
+            set(state => ({
+                dropIndicators: [...state.dropIndicators, indicator]
+            }));
+        },
+
+        clearDropIndicators: () => {
+            // Remove DOM elements
+            get().dropIndicators.forEach(indicator => {
+                if (indicator.element) {
+                    indicator.element.remove();
+                }
+            });
+
+            set({ dropIndicators: [] });
+        },
+
+        handleDrop: (e, targetId) => {
+            const { dragSource, dropTargets } = get();
+            if (!dragSource) return false;
+
+            const target = dropTargets.find(t => t.id === targetId);
+            if (!target) return false;
+
+            // Check if target accepts this drag type
+            if (!target.accepts.includes(dragSource.type)) {
+                console.log(`Drop target ${targetId} does not accept ${dragSource.type}`);
+                return false;
+            }
+
+            console.log(`Dropping ${dragSource.type}/${dragSource.id} onto ${target.type}/${target.id}`);
+
+            // Handle drop based on custom handlers
+            // This is where we'd integrate with the specific widget or component logic
+
+            // End the drag operation
+            get().endDrag();
+
+            return true;
         }
-
-        console.log(`Dropping ${dragSource.type}/${dragSource.id} onto ${target.type}/${target.id}`);
-
-        // Handle drop based on custom handlers
-        // This is where we'd integrate with the specific widget or component logic
-
-        // End the drag operation
-        get().endDrag();
-
-        return true;
     }
-}));
+});
 
 /**
  * Hook to make an element draggable
@@ -431,40 +460,192 @@ export function useDragAndDrop(
         positions?: ('before' | 'after' | 'inside')[];
     }
 ) {
-    const { dragProps, isDragging, elementRef: dragRef } = useDraggable(type, id, dragData, {
+    const {
+        registerDropTarget,
+        unregisterDropTarget,
+        isDragging,
+        dragSource,
+        activeDropTarget,
+        setActiveDropTarget,
+        addDropIndicator,
+        clearDropIndicators,
+        handleDrop
+    } = useDragDrop();
+
+    const elementRef = useRef<HTMLElement>(null);
+    const [isOver, setIsOver] = useState(false);
+
+    // Create a stable ID for this drop target
+    const dropTargetId = useMemo(() => `${type}-${id}`, [type, id]);
+
+    // Save options in a ref to prevent unnecessary effect reruns
+    const optionsRef = useRef(options);
+    optionsRef.current = options;
+
+    // Save drop handler in a ref
+    const onDropRef = useRef(onDrop);
+    onDropRef.current = onDrop;
+
+    // Register this element as a drop target
+    useEffect(() => {
+        if (options?.dropDisabled) return;
+
+        // Only call register when necessary
+        registerDropTarget({
+            id: dropTargetId,
+            type,
+            accepts: acceptTypes,
+            element: elementRef.current || undefined,
+            positions: options?.positions
+        });
+
+        return () => {
+            unregisterDropTarget(dropTargetId);
+        };
+    }, [
+        dropTargetId,
+        type,
+        acceptTypes,
+        options?.dropDisabled,
+        options?.positions,
+        registerDropTarget,
+        unregisterDropTarget
+    ]);
+
+    // Handle drag over
+    const handleDragOver = useCallback((e: React.DragEvent<HTMLElement>) => {
+        if (optionsRef.current?.dropDisabled) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Check if we can accept this drag
+        if (!isDragging || !dragSource) return;
+        if (!acceptTypes.includes(dragSource.type)) {
+            e.dataTransfer.dropEffect = 'none';
+            return;
+        }
+
+        e.dataTransfer.dropEffect = 'move';
+
+        // Set as active drop target
+        if (!isOver) {
+            setIsOver(true);
+            setActiveDropTarget(dropTargetId);
+            clearDropIndicators();
+        }
+    }, [
+        isDragging,
+        dragSource,
+        acceptTypes,
+        isOver,
+        setActiveDropTarget,
+        clearDropIndicators,
+        dropTargetId
+    ]);
+
+    // Handle drag leave
+    const handleDragLeave = useCallback((e: React.DragEvent<HTMLElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Check if we're leaving to a child element
+        const element = elementRef.current;
+        if (element) {
+            const rect = element.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+
+            if (
+                x >= rect.left &&
+                x <= rect.right &&
+                y >= rect.top &&
+                y <= rect.bottom
+            ) {
+                // Still within bounds, just moving to a child
+                return;
+            }
+        }
+
+        setIsOver(false);
+
+        // Only clear if this is the active target
+        if (activeDropTarget?.id === dropTargetId) {
+            setActiveDropTarget(null);
+            clearDropIndicators();
+        }
+    }, [dropTargetId, activeDropTarget, setActiveDropTarget, clearDropIndicators]);
+
+    // Handle drop
+    const handleDropEvent = useCallback((e: React.DragEvent<HTMLElement>) => {
+        if (optionsRef.current?.dropDisabled) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Reset state
+        setIsOver(false);
+
+        try {
+            // Get drag data
+            const dragDataStr = e.dataTransfer.getData('application/json');
+            if (!dragDataStr) return;
+
+            // Handle the drop
+            const success = handleDrop(e, dropTargetId);
+
+            // Call custom handler if provided
+            if (success && onDropRef.current && dragSource) {
+                onDropRef.current(dragSource, 'inside');
+            }
+        } catch (error) {
+            console.error('Error handling drop:', error);
+        }
+    }, [dropTargetId, handleDrop, dragSource]);
+
+    // Use dragRef and dragProps from useDraggable
+    const { dragProps, isDragging: isDraggingElement } = useDraggable(type, id, dragData, {
         dragPreview: options?.dragPreview,
         dragHandle: options?.dragHandle,
         disabled: options?.dragDisabled
     });
 
-    const { dropProps, isOver, canDrop } = useDroppable(type, id, acceptTypes, onDrop, {
-        disabled: options?.dropDisabled || isDragging, // Can't drop on self
-        positions: options?.positions
-    });
-
-    // Combine the refs
-    const combinedRef = useCallback((element: HTMLElement | null) => {
-        // @ts-ignore - these are actually compatible
-        dragRef.current = element;
-        // @ts-ignore
-        dropProps.ref.current = element;
-    }, [dragRef, dropProps.ref]);
-
-    // Combine all props
-    const elementProps = {
+    // Combine all props, but maintain stable reference
+    const elementProps = useMemo(() => ({
         ...dragProps,
-        ...dropProps,
-        ref: combinedRef,
-        className: `${dragProps.className} ${dropProps.className}`,
+        ref: (element: HTMLElement | null) => {
+            // Set refs for both drag and drop
+            elementRef.current = element;
+            if (typeof dragProps.ref === 'function') {
+                dragProps.ref(element);
+            }
+        },
+        onDragOver: handleDragOver,
+        onDragLeave: handleDragLeave,
+        onDrop: handleDropEvent,
+        'data-drop-id': dropTargetId,
+        'data-drop-type': type,
+        'data-drop-active': activeDropTarget?.id === dropTargetId,
         'data-draggable': !options?.dragDisabled,
         'data-droppable': !options?.dropDisabled
-    };
+    }), [
+        dragProps,
+        dropTargetId,
+        type,
+        handleDragOver,
+        handleDragLeave,
+        handleDropEvent,
+        activeDropTarget?.id,
+        options?.dragDisabled,
+        options?.dropDisabled
+    ]);
 
     return {
         elementProps,
-        isDragging,
+        isDragging: isDraggingElement,
         isOver,
-        canDrop
+        canDrop: isDragging && dragSource && acceptTypes.includes(dragSource.type),
+        elementRef
     };
 }
 

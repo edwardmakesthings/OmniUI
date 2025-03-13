@@ -1,48 +1,81 @@
 // src/core/index.ts
-import { initializeComponentSystem } from '../registry';
-import { useDragDrop, useDraggable, useDroppable, useDragAndDrop } from './drag-drop/DragDropManager';
-import { useComponentPanelDrag, useWidgetDropTarget, useComponentDragDrop } from './drag-drop/widgetHooks';
+import { initializeComponentRegistry, loadComponentRegistry } from '../registry/componentRegistry';
+import { registerComponentRenderers } from '@/registry/componentRenderers';
+import { useWidgetStore } from '@/store/widgetStore';
+import { useComponentStore } from '@/store/componentStore';
+import { useUIStore } from '@/store/uiStore';
 
-/**
- * Initialize all core systems
- */
-export function initializeCoreSystem() {
-    // Initialize component registry and renderer system
-    initializeComponentSystem();
-
-    console.log('Core system initialized');
+interface InitOptions {
+    resetStores?: boolean;
+    registerComponents?: boolean;
 }
 
-// Export component system
-export {
-    useComponents,
+/**
+ * Initialize the core system components
+ * This should be called during application startup
+ */
+export async function initializeCoreSystem(options: InitOptions = {}) {
+    const { resetStores = false, registerComponents = true } = options;
 
-    // Also re-export from registry
-    renderComponent,
-    renderComponentHierarchy
-} from '../registry';
+    console.log("Initializing core system...");
 
-// Export drag-drop system
-export {
-    useDragDrop,
-    useDraggable,
-    useDroppable,
-    useDragAndDrop,
+    // Reset stores if requested
+    if (resetStores) {
+        console.log("Resetting stores...");
+        useWidgetStore.getState().purgeStore();
+        useComponentStore.getState().purgeStore({
+            resetToDefaults: true
+        });
+        useUIStore.getState(); // Initialize UI store
+    }
 
-    // Widget-specific hooks
-    useComponentPanelDrag,
-    useWidgetDropTarget,
-    useComponentDragDrop
-};
+    // Make widget store available globally
+    window.__WIDGET_STORE__ = useWidgetStore;
 
-// Export types
-export type {
-    ComponentRenderProps,
-    ComponentRenderer
-} from '../registry/componentRegistry';
+    // Initialize component registry
+    const registry = initializeComponentRegistry();
 
-export type {
-    DragSource,
-    DropTarget,
-    DropIndicator
-} from './drag-drop/DragDropManager';
+    // Register component renderers
+    if (registerComponents) {
+        registerComponentRenderers();
+    }
+
+    // Load component registry
+    await loadComponentRegistry();
+
+    console.log("Core system initialized");
+
+    return { registry };
+}
+
+/**
+ * Create essential event listeners for cross-component communication
+ */
+export function setupGlobalEventListeners() {
+    // Widget update event listener
+    window.addEventListener('widget-updated', (e: any) => {
+        // Notify any interested components about the widget update
+        const { widgetId } = e.detail;
+
+        // Find all panels that might need to know about this update
+        const panels = document.querySelectorAll('[data-panel-id]');
+        panels.forEach(panel => {
+            // Create a new event specific to each panel
+            const panelEvent = new CustomEvent('widget-hierarchy-changed', {
+                detail: { widgetId }
+            });
+            panel.dispatchEvent(panelEvent);
+        });
+    });
+}
+
+/**
+ * Export all core types and utilities
+ */
+export * from './types/ComponentTypes';
+export * from './types/EntityTypes';
+export * from './types/Geometry';
+export * from './types/Measurement';
+export * from './types/UI';
+export * from './base/StoreError';
+export * from './dragDrop/ComponentDragDropHelper';

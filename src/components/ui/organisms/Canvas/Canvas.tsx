@@ -55,7 +55,6 @@ export const Canvas = () => {
     const updateNodesFromWidgets = useCallback(() => {
         // Use the convertToNodes method to get properly formatted nodes
         const formattedNodes = widgetStore.convertToNodes();
-        // console.log("Setting nodes:", formattedNodes);
         setNodes(formattedNodes);
     }, [widgetStore, setNodes]);
 
@@ -132,9 +131,12 @@ export const Canvas = () => {
                             {
                                 x: { value: 20, unit: "px" },
                                 y: { value: 20, unit: "px" },
-                            } // Initial position inside widget
+                            }
                         );
                     }
+
+                    // Force update nodes to reflect new widget
+                    updateNodesFromWidgets();
                 }
             } catch (err) {
                 console.error("Error handling drop:", err);
@@ -143,13 +145,14 @@ export const Canvas = () => {
         [
             reactFlowInstance,
             gridSettings.snapToGrid,
-            gridSettings.gridSize,
+            safeGridSize,
             isPanning,
             widgetStore,
+            updateNodesFromWidgets,
         ]
     );
 
-    // Handle when nodes connect - disabled for MVP
+    // Handle node connections - disabled for MVP
     const onConnect = useCallback((params: Connection) => {
         console.log("Connection attempt:", params);
         // Connections disabled for MVP
@@ -208,6 +211,12 @@ export const Canvas = () => {
         };
     }, []);
 
+    // Create global access to widget store for cross-component communication
+    useEffect(() => {
+        // Make widget store globally available for access by other components
+        window.__WIDGET_STORE__ = useWidgetStore;
+    }, [widgetStore]);
+
     // Load widgets on initial render
     useEffect(() => {
         // Initial update of nodes from widget store
@@ -251,9 +260,9 @@ export const Canvas = () => {
                     selectNodesOnDrag={false}
                 >
                     <Background
-                        variant={BackgroundVariant.Dots} // Explicitly use dots variant
-                        gap={Math.max(10, gridSettings.gridSize || 20)} // Ensure gap is always >0 and reasonable
-                        size={Math.max(1, gridSettings.gridSize / 20 || 1)} // Scale dot size relative to grid
+                        variant={BackgroundVariant.Dots}
+                        gap={Math.max(10, gridSettings.gridSize || 20)}
+                        size={Math.max(1, gridSettings.gridSize / 20 || 1)}
                         color={
                             gridSettings.showGrid
                                 ? "rgba(100, 100, 100, 0.8)"

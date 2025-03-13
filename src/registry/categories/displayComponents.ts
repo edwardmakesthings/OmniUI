@@ -20,6 +20,7 @@ export function registerDisplayComponents() {
         name: 'label',
         label: 'Label',
         type: ComponentTypeValues.Label,
+        category: "display",
         isLayout: false,
         visible: true,
         enabled: true,

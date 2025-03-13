@@ -35,6 +35,13 @@ export interface ComponentStore extends ComponentState {
         id: EntityId,
         bindingPath: string
     ) => Promise<void>;
+    purgeStore: (options?: {
+        keepSystemComponents?: boolean;
+        resetToDefaults?: boolean;
+    }) => {
+        definitionCount: number;
+        instanceCount: number;
+    };
     // To be added:
     // validateInstanceBindings: (id: EntityId) => BindingValidationResult;
     // selection: SelectionState;
@@ -392,6 +399,65 @@ export const useComponentStore = create<ComponentStore>()(
                     `No binding found for path: ${bindingPath}`,
                     StoreErrorCodes.BINDING_NOT_FOUND
                 );
+            },
+            /**
+             * Purge the store by clearing all or some component definitions and instances.
+             * Returns an object with the count of definitions and instances that were cleared.
+             * @param {Object} [options] - Optional parameters to control the purge behavior.
+             * @param {boolean} [options.keepSystemComponents=false] - If true, only user-created components will be cleared.
+             * @param {boolean} [options.resetToDefaults=false] - If true, the store will be reset to its default state after clearing.
+             * @returns {Object} - An object with two properties: definitionCount and instanceCount, which represent the count of definitions and instances that were cleared.
+             */
+            purgeStore: (options = {}) => {
+                const state = get();
+                const { keepSystemComponents = false, resetToDefaults = false } = options;
+
+                // Count for return value
+                const definitionCount = Object.keys(state.definitions).length;
+                const instanceCount = Object.keys(state.instances).length;
+
+                // Create an empty state to set
+                const newState: Partial<ComponentState> = {
+                    instances: {} // Always clear instances
+                };
+
+                // Handle definitions based on options
+                if (keepSystemComponents) {
+                    // Keep only system components (those not created by users)
+                    const systemDefinitions = Object.entries(state.definitions)
+                        .filter(([_, def]) => !def.metadata.isUserComponent)
+                        .reduce((acc, [id, def]) => {
+                            acc[id as EntityId] = def;
+                            return acc;
+                        }, {} as Record<EntityId, ComponentDefinition>);
+
+                    newState.definitions = systemDefinitions;
+                } else {
+                    // Clear all definitions
+                    newState.definitions = {};
+                }
+
+                // Set the new state first
+                set(newState);
+
+                // Initialize defaults if requested
+                if (resetToDefaults) {
+                    // Import and register default components
+                    import('@/registry/categories/layoutComponents').then(module => {
+                        module.registerLayoutComponents();
+                    });
+                    import('@/registry/categories/controlComponents').then(module => {
+                        module.registerControlComponents();
+                    });
+                    import('@/registry/categories/displayComponents').then(module => {
+                        module.registerDisplayComponents();
+                    });
+                }
+
+                return {
+                    definitionCount,
+                    instanceCount
+                };
             }
         }),
         {

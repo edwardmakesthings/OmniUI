@@ -14,42 +14,30 @@ import {
     CompPushButtonIcon,
     CompMenuDropdownIcon,
 } from "@/components/ui/icons";
-import { useComponentPanelDrag } from "@/core";
+import { useComponentPanelDrag } from "@/core/dragDrop/widgetHooks";
 
 export interface ComponentThumbnailProps {
     component: ComponentDefinition;
-    onDragStart?: (
-        e: React.DragEvent<HTMLDivElement>,
-        component: ComponentDefinition
-    ) => void;
     isUserComponent?: boolean;
     className?: string;
 }
 
-export const ComponentThumbnail = ({
+/**
+ * A draggable thumbnail representing a component in the component palette
+ */
+export default function ComponentThumbnail({
     component,
-    onDragStart,
     isUserComponent = false,
     className,
-}: ComponentThumbnailProps) => {
+}: ComponentThumbnailProps) {
     // Get appropriate icon based on component type
     const IconComponent = getComponentIcon(component.type);
 
     const { dragProps, isDragging } = useComponentPanelDrag(
         component.id,
         component.type,
-        component.label
+        component.label || component.name
     );
-
-    // Handle drag start
-    // const handleDragStart = (e: React.DragEvent) => {
-    //     e.currentTarget.setAttribute("draggable", "true");
-
-    //     // Call custom handler if provided
-    //     if (onDragStart) {
-    //         onDragStart(e, component);
-    //     }
-    // };
 
     const thumbnailStyles = composeStyles(
         backgroundStyles.solid.dark,
@@ -68,6 +56,7 @@ export const ComponentThumbnail = ({
             )}
             data-component-id={component.id}
             data-component-type={component.type}
+            title={component.label}
         >
             <div className="p-2 flex flex-col items-center">
                 <div className="w-12 h-12 flex items-center justify-center">
@@ -84,7 +73,7 @@ export const ComponentThumbnail = ({
             </div>
         </div>
     );
-};
+}
 
 // Helper to get icon component based on component type
 function getComponentIcon(type: string) {
@@ -103,5 +92,3 @@ function getComponentIcon(type: string) {
             return CompPushButtonIcon;
     }
 }
-
-export default ComponentThumbnail;

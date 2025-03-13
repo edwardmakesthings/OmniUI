@@ -7,7 +7,10 @@ import { persist } from "zustand/middleware";
 import { ComponentConfig } from "@/core/base/ComponentConfig";
 import { useComponentStore } from "@/store/componentStore";
 import { useEffect } from "react";
-import { ButtonIcon, InputIcon, PanelIcon, WidgetIcon } from "@/components/ui";
+import { ButtonIcon, InputIcon, LabelIcon, PanelIcon, WidgetIcon } from "@/components/ui";
+import { UnitType } from "@/core/types/Measurement";
+import { notifyWidgetChange } from "@/core/eventBus/widgetEvents";
+import { componentIconMap } from "@/registry/componentRenderers";
 
 // Widget display types
 export type WidgetDisplayType = 'canvas' | 'modal' | 'drawer' | 'embedded';
@@ -133,6 +136,11 @@ export interface WidgetStore {
     convertToNodes: () => FlowWidgetNode[];
     getWidget: (id: EntityId) => Widget | undefined;
     getVisibleWidgets: (displayType?: WidgetDisplayType) => Widget[];
+    purgeStore: (options?: {
+        keepWidgets?: boolean;
+    }) => {
+        widgetCount: number;
+    };
 
     // State operations
     setActiveWidget: (id: EntityId | null) => void;
@@ -414,6 +422,9 @@ export const useWidgetStore = create<WidgetStore>()(
                             get().updateWidget(widgetId, { size: newSize as Size });
                         }, 50); // Slight delay to ensure the component is fully added
                     }
+
+                    notifyWidgetChange(widgetId, 'componentAdded');
+
                     return newComponent;
 
                 } catch (error) {
@@ -428,6 +439,8 @@ export const useWidgetStore = create<WidgetStore>()(
                     if (!widget) return state;
 
                     const updatedComponents = widget.components.map(c => c.id == componentId ? { ...c, ...updates } : c);
+
+                    notifyWidgetChange(widgetId, 'componentUpdated');
 
                     return {
                         widgets: {
@@ -447,6 +460,7 @@ export const useWidgetStore = create<WidgetStore>()(
                     if (!widget) return state;
 
                     const updatedComponents = widget.components.filter(c => c.id !== componentId);
+                    notifyWidgetChange(widgetId, 'componentRemoved');
 
                     return {
                         widgets: {
@@ -490,90 +504,104 @@ export const useWidgetStore = create<WidgetStore>()(
                 });
             },
 
-            addChildComponent: (widgetId, parentComponentId, definitionId, position) => {
-                const widget = get().widgets[widgetId];
-                if (!widget) return null;
+            addChildComponent: (
+                widgetId: EntityId,
+                parentComponentId: EntityId,
+                definitionId: EntityId,
+                position = {
+                    x: { value: 10, unit: "px" as UnitType },
+                    y: { value: 10, unit: "px" as UnitType }
+                }
+            ) => {
+                const state = get();
+                const widget = state.widgets[widgetId];
 
-                // Find the parent component
-                const parentComponent = widget.components.find(c => c.id === parentComponentId);
-                if (!parentComponent) return null;
-
-                // Calculate relative position within the parent
-                // If no position is provided, calculate a suitable position within the parent container
-                let childPosition = position;
-                if (!childPosition) {
-                    // Get existing children to calculate next position
-                    const existingChildren = widget.components
-                        .filter(c => c.parentId === parentComponentId)
-                        .length;
-
-                    // Simple grid layout within parent (3 columns)
-                    const columns = 3;
-                    const rowIndex = Math.floor(existingChildren / columns);
-                    const colIndex = existingChildren % columns;
-
-                    // Base padding and item spacing
-                    const padding = 10;
-                    const itemSpacing = 10;
-                    const itemDefaultWidth = 80;
-                    const itemDefaultHeight = 40;
-
-                    childPosition = {
-                        x: {
-                            value: padding + (colIndex * (itemDefaultWidth + itemSpacing)),
-                            unit: "px"
-                        },
-                        y: {
-                            value: padding + (rowIndex * (itemDefaultHeight + itemSpacing)),
-                            unit: "px"
-                        }
-                    };
+                if (!widget) {
+                    console.error(`Widget ${widgetId} not found`);
+                    return null;
                 }
 
-                // Use the existing addComponentToWidget method to create the component
-                const newComponent = get().addComponentToWidget(widgetId, definitionId, childPosition);
+                // First, check if parent exists and is a container
+                const parentComponent = widget.components.find(comp => comp.id === parentComponentId);
 
-                if (!newComponent) return null;
+                if (!parentComponent) {
+                    console.error(`Parent component ${parentComponentId} not found in widget ${widgetId}`);
+                    return null;
+                }
 
-                // Update parent-child relationships
-                set(state => {
-                    const widget = state.widgets[widgetId];
-                    if (!widget) return state;
+                try {
+                    // Create component instance from definition
+                    const componentStore = useComponentStore.getState();
+                    const instance = componentStore.createFromDefinition(
+                        definitionId,
+                        {
+                            layout: {
+                                position,
+                                size: {
+                                    width: { value: 100, unit: "px" },
+                                    height: { value: 40, unit: "px" }
+                                }
+                            }
+                        } as ComponentConfig
+                    );
 
-                    const updatedComponents = widget.components.map(c => {
-                        if (c.id === parentComponentId) {
-                            // Update parent to include new child
-                            return {
-                                ...c,
-                                childIds: [...(c.childIds || []), newComponent.id]
-                            };
-                        }
-                        if (c.id === newComponent.id) {
-                            // Set parent on the new component
-                            return {
-                                ...c,
-                                parentId: parentComponentId,
-                                childIds: [] // Initialize empty children array
-                            };
-                        }
-                        return c;
+                    // Create component reference for widget
+                    const componentId = createEntityId(`component-${nanoid(6)}`);
+                    const newComponent: WidgetComponent = {
+                        id: componentId,
+                        definitionId,
+                        instanceId: instance.id,
+                        position,
+                        size: {
+                            width: { value: 100, unit: "px" },
+                            height: { value: 40, unit: "px" }
+                        },
+                        zIndex: parentComponent.childIds?.length || 0,
+                        parentId: parentComponentId,
+                        childIds: []
+                    };
+
+                    // Update the parent component's childIds
+                    const updatedParent = {
+                        ...parentComponent,
+                        childIds: [...(parentComponent.childIds || []), componentId]
+                    };
+
+                    // Update the widget state
+                    set(state => {
+                        // Map all components, updating the parent
+                        const updatedComponents = widget.components.map(comp =>
+                            comp.id === parentComponentId ? updatedParent : comp
+                        );
+
+                        // Add the new component to the list
+                        updatedComponents.push(newComponent);
+
+                        return {
+                            widgets: {
+                                ...state.widgets,
+                                [widgetId]: {
+                                    ...widget,
+                                    components: updatedComponents
+                                }
+                            }
+                        };
                     });
 
-                    return {
-                        widgets: {
-                            ...state.widgets,
-                            [widgetId]: {
-                                ...widget,
-                                components: updatedComponents
-                            }
-                        }
-                    };
-                });
+                    notifyWidgetChange(widgetId, 'hierarchyChanged');
 
-                return newComponent;
+                    return newComponent;
+                } catch (error) {
+                    console.error('Error creating child component:', error);
+                    return null;
+                }
             },
 
-            moveComponent: (widgetId, componentId, newParentId, position) => {
+            moveComponent: (
+                widgetId: EntityId,
+                componentId: EntityId,
+                newParentId?: EntityId // undefined means move to root
+            ) => {
                 set(state => {
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
@@ -591,7 +619,6 @@ export const useWidgetStore = create<WidgetStore>()(
 
                     // Check for circular reference (can't make a component its own ancestor)
                     if (newParentId) {
-                        // Check if target is a descendant of the component being moved
                         let current = newParent;
                         let foundCircular = false;
 
@@ -601,66 +628,33 @@ export const useWidgetStore = create<WidgetStore>()(
                                 foundCircular = true;
                                 break;
                             }
-                            current = widget.components.find(c => c.id === current.parentId);
+                            current = widget.components.find(c => c.id === current!.parentId);
                         }
 
                         if (foundCircular) return state;
                     }
 
-                    // If we're moving to a new parent, calculate relative position
-                    let newPosition = position;
-                    if (newParentId && !position) {
-                        // Calculate position within new parent container
-                        const existingChildren = widget.components.filter(c => c.parentId === newParentId);
-
-                        // Simple grid layout within parent (3 columns)
-                        const columns = 3;
-                        const rowIndex = Math.floor(existingChildren.length / columns);
-                        const colIndex = existingChildren.length % columns;
-
-                        // Base padding and item spacing
-                        const padding = 10;
-                        const itemSpacing = 10;
-                        const itemDefaultWidth = 80;
-                        const itemDefaultHeight = 40;
-
-                        newPosition = {
-                            x: {
-                                value: padding + (colIndex * (itemDefaultWidth + itemSpacing)),
-                                unit: "px"
-                            },
-                            y: {
-                                value: padding + (rowIndex * (itemDefaultHeight + itemSpacing)),
-                                unit: "px"
-                            }
-                        };
-                    }
-
-                    // Update component with new parent and position
-                    const updatedComponentToMove = {
-                        ...componentToMove,
-                        parentId: newParentId || undefined, // Set to undefined if no new parent
-                        position: newPosition || componentToMove.position // Keep old position if not provided
-                    };
-
                     // Update components array with all necessary changes
                     const updatedComponents = widget.components.map(c => {
                         if (c.id === componentId) {
                             // This is the component being moved
-                            return updatedComponentToMove;
+                            return {
+                                ...c,
+                                parentId: newParentId || undefined // Set to undefined if no new parent
+                            };
                         }
                         else if (c.id === oldParentId && oldParent) {
                             // This is the old parent - remove child from its childIds
                             return {
                                 ...c,
-                                childIds: c.childIds.filter(id => id !== componentId)
+                                childIds: c.childIds?.filter(id => id !== componentId) || []
                             };
                         }
                         else if (c.id === newParentId && newParent) {
                             // This is the new parent - add child to its childIds
                             return {
                                 ...c,
-                                childIds: [...c.childIds, componentId]
+                                childIds: [...(c.childIds || []), componentId]
                             };
                         }
                         // No changes needed for other components
@@ -700,62 +694,108 @@ export const useWidgetStore = create<WidgetStore>()(
                         });
                     });
                 }
+
+                // Trigger a layout hierarchy update event
+                setTimeout(() => {
+                    const layoutHierarchyPanel = document.querySelector('[data-panel-id="layout-hierarchy"]');
+                    if (layoutHierarchyPanel) {
+                        const event = new CustomEvent('widget-updated', {
+                            detail: { widgetId }
+                        });
+                        layoutHierarchyPanel.dispatchEvent(event);
+                    }
+                }, 0);
+
+                notifyWidgetChange(widgetId, 'hierarchyChanged');
+
             },
 
             // Implementation for the hierarchy getter
-            getComponentHierarchy: (widgetId) => {
+            getComponentHierarchy: (widgetId: EntityId, includeWidget = true) => {
                 const widget = get().widgets[widgetId];
                 if (!widget) return [];
 
-                // Find root-level components (no parent)
-                const rootComponents = widget.components.filter(c => !c.parentId);
+                // Debug logging to help diagnose hierarchy issues
+                console.log(`Building hierarchy for widget ${widgetId} with ${widget.components.length} components`);
+
+                // Log parent-child relationships
+                const parentChildMap = {};
+                widget.components.forEach(c => {
+                    const key = c.parentId ? c.parentId : 'root';
+                    if (!parentChildMap[key]) {
+                        parentChildMap[key] = [];
+                    }
+                    parentChildMap[key].push({
+                        id: c.id,
+                        type: c.instanceId ? useComponentStore.getState().instances[c.instanceId]?.type : 'unknown'
+                    });
+                });
+
+                console.log('Parent-child relationships:', parentChildMap);
+
+
 
                 // Get component store to access instances
                 const componentStore = useComponentStore.getState();
 
                 // Recursively build tree
                 const buildTree = (component) => {
-                    const instance = useComponentStore.getState().instances[component.instanceId];
-                    const childComponents = widget.components.filter(c => c.parentId === component.id);
+                    try {
+                        // Get the instance, with fallback if not found
+                        let instance;
+                        try {
+                            instance = componentStore.instances[component.instanceId];
+                        } catch (err) {
+                            console.warn(`Instance not found for component ${component.id}`);
+                        }
 
-                    // Determine icon based on component type
-                    let icon;
-                    switch (instance?.type) {
-                        case 'Panel':
-                        case 'ScrollBox':
-                            icon = PanelIcon;
-                            break;
-                        case 'PushButton':
-                            icon = ButtonIcon;
-                            break;
-                        case 'Input':
-                            icon = InputIcon;
-                            break;
-                        default:
-                            icon = PanelIcon;
+                        // Find child components
+                        const childComponents = widget.components.filter(c => c.parentId === component.id);
+                        console.log(`Component ${component.id} has ${childComponents.length} children`);
+
+                        // Determine icon based on component type
+                        let icon = PanelIcon;
+                        if (instance?.type && componentIconMap[instance.type]) {
+                            icon = componentIconMap[instance.type];
+                        }
+
+                        return {
+                            // Use combined widget/component ID for tree identification
+                            id: `${widgetId}/${component.id}`,
+                            type: instance?.type || 'unknown',
+                            label: instance?.label || component.id.toString().split('-')[0],
+                            icon,
+                            // Control drag/drop based on component type
+                            canDrop: instance?.type === 'Panel' || instance?.type === 'ScrollBox',
+                            canDrag: true,
+                            // Include data about component for later use
+                            data: {
+                                componentId: component.id,
+                                widgetId,
+                                instanceId: component.instanceId
+                            },
+                            // Include parent reference for easier hierarchy management
+                            parentId: component.parentId ? `${widgetId}/${component.parentId}` : undefined,
+                            // Process children recursively
+                            children: childComponents.map(buildTree)
+                        };
+                    } catch (error) {
+                        console.error(`Error building tree for component ${component.id}:`, error);
+                        return {
+                            id: `${widgetId}/${component.id}`,
+                            type: 'error',
+                            label: `Error: ${component.id}`,
+                            icon: PanelIcon,
+                            canDrop: false,
+                            canDrag: false,
+                            children: []
+                        };
                     }
-
-                    return {
-                        // Use combined widget/component ID for tree identification
-                        id: `${widgetId}/${component.id}`,
-                        type: instance?.type || 'unknown',
-                        label: instance?.label || 'Component',
-                        icon,
-                        // Control drag/drop based on component type
-                        canDrop: instance?.type === 'Panel' || instance?.type === 'ScrollBox',
-                        canDrag: true,
-                        // Include data about component for later use
-                        data: {
-                            componentId: component.id,
-                            widgetId,
-                            instanceId: component.instanceId
-                        },
-                        // Include parent reference for easier hierarchy management
-                        parentId: component.parentId ? `${widgetId}/${component.parentId}` : undefined,
-                        // Process children recursively
-                        children: childComponents.map(buildTree)
-                    };
                 };
+
+                // Find root-level components (no parent)
+                const rootComponents = widget.components.filter(c => !c.parentId);
+                console.log(`Found ${rootComponents.length} root components`);
 
                 // Map widget as the root with components as children
                 return [{
@@ -948,6 +988,31 @@ export const useWidgetStore = create<WidgetStore>()(
                     widget.isVisible &&
                     (!displayType || widget.displayType === displayType)
                 );
+            },
+
+            /**
+             * Purge the store by clearing all or some widgets and their components.
+             * Returns an object with a single property: `widgetCount`, which is the count of widgets that were cleared.
+             * @param {Object} [options] - Optional parameters to control the purge behavior.
+             * @param {boolean} [options.keepWidgets=false] - If true, widgets and their components will not be cleared.
+             * @returns {Object} - An object with a single property: `widgetCount`, which is the count of widgets that were cleared.
+             */
+            purgeStore: (options = {}) => {
+                const state = get();
+                const { keepWidgets = false } = options;
+
+                // Count for return value
+                const widgetCount = Object.keys(state.widgets).length;
+
+                // Set new state
+                if (!keepWidgets) {
+                    set({
+                        widgets: {},
+                        activeWidgetId: null
+                    });
+                }
+
+                return { widgetCount };
             },
 
             /**

@@ -1,12 +1,11 @@
 // src/registry/index.ts
 import { initializeComponentRegistry, useComponentRegistry } from './componentRegistry';
-import { registerComponentRenderers, renderComponent, renderComponentHierarchy } from './componentRenderers';
+import { registerComponentRenderers } from './componentRenderers';
 import { loadComponentRegistry } from './componentRegistry';
 import { useComponentStore } from '@/store/componentStore';
 import { useWidgetStore } from '@/store/widgetStore';
 import { useMemo, useCallback, useEffect, useState } from 'react';
 import { EntityId } from '@/core/types/EntityTypes';
-import { ComponentType } from '@/core/types/ComponentTypes';
 import { ComponentInstance } from '@/core/base/ComponentInstance';
 
 /**
@@ -51,21 +50,21 @@ export function useComponents() {
         [componentStore.definitions]
     );
 
-    // Get definitions by type
-    const getDefinitionsByType = useCallback((type: ComponentType) =>
-        definitions.filter(def => def.type === type),
+    // Get definitions by category
+    const getDefinitionsByCategory = useCallback((type: "layout" | "control" | "display") =>
+        definitions.filter(def => def.category === type),
         [definitions]
     );
 
     // Render a component
     const render = useCallback((instance: ComponentInstance, props) =>
-        renderComponent(instance, props),
+        registry.renderComponent(instance, props),
         []
     );
 
     // Render a component hierarchy
-    const renderHierarchy = useCallback((instance: ComponentInstance, widgetId: EntityId, props) =>
-        renderComponentHierarchy(instance, widgetId, props),
+    const renderHierarchy = useCallback((instanceId: EntityId, widgetId: EntityId, options) =>
+        registry.renderComponentHierarchy(instanceId, widgetId, options),
         []
     );
 
@@ -77,7 +76,7 @@ export function useComponents() {
 
     return {
         definitions,
-        getDefinitionsByType,
+        getDefinitionsByCategory,
         render,
         renderHierarchy,
         createInstance,
@@ -156,7 +155,6 @@ export function useComponentSelection(widgetId: EntityId) {
 
 // Re-export
 export { useComponentRegistry } from './componentRegistry';
-export { renderComponent, renderComponentHierarchy } from './componentRenderers';
 export { loadComponentRegistry, saveComponentRegistry } from './componentRegistry';
 
 // Export types

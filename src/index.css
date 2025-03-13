@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/scrollbars.css";
+@import "./styles/component-edit.css";
 
 :root {
     font-synthesis: none;
@@ -102,8 +103,10 @@ body,
     --property-editor-icon-size: var(--icon-size-sm);
 }
 
-/* Styling for view mode */
-[data-widget-id]:not([data-edit-mode="true"]) .widget-content {
+/* Widget View Mode Styles */
+
+/* Base container styling */
+.widget-content {
     position: relative;
 }
 
@@ -117,48 +120,35 @@ body,
     padding: 8px;
 }
 
-/* Default component spacing in view mode */
+/* Component margins in view mode */
 [data-widget-id]:not([data-edit-mode="true"]) [data-component-id] {
     margin-bottom: 8px;
 }
 
-/* Debug styles */
+/* Debug styles for development */
 .debug-layout [data-component-type="Panel"] > div,
 .debug-layout [data-component-type="ScrollBox"] > div {
     outline: 1px dashed rgba(255, 0, 0, 0.3);
 }
 
-/* Component containers */
+/* Component Containers - Base Styles */
 .component-container {
     position: relative;
     width: 100%;
     margin-bottom: 8px;
-    transition: all 0.1s ease;
-}
-
-/* Edit mode positioning */
-[data-widget-id][data-edit-mode="true"] .widget-content > .component-container {
     transition: all 0.15s ease-out;
 }
 
-/* Only root components are absolute in edit mode */
-/* [data-widget-id][data-edit-mode="true"] .widget-content > [data-component-id] {
-    position: relative;
-} */
-
-/* Child components in edit mode */
-[data-widget-id][data-edit-mode="true"]
-    [data-has-children="true"]
-    [data-component-id] {
-    position: relative !important;
-    margin: 8px 0;
+/* Hover state for edit mode */
+[data-widget-id][data-edit-mode="true"] .component-container:hover {
+    outline: 1px solid rgba(59, 130, 246, 0.3);
 }
 
-/* Container sizing in edit mode */
-[data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
-[data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
-    min-height: 80px;
-    width: 100% !important;
+/* Selected component state */
+.component-container.selected {
+    outline: 2px solid #3b82f6 !important;
+    z-index: 5 !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3) !important;
 }
 
 /* Empty container visualization */
@@ -168,6 +158,38 @@ body,
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+}
+
+/* Container sizing for edit mode */
+[data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
+    min-height: 80px;
+    width: 100% !important;
+}
+
+/* Nested components in containers */
+[data-widget-id][data-edit-mode="true"]
+    [data-has-children="true"]
+    [data-component-id] {
+    position: relative !important;
+    margin: 8px 0;
+}
+
+/* Ensure correct position for root vs. nested components */
+.nested-component {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+}
+
+/* Container children styling */
+.panel-children-container,
+.scrollbox-children-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
 }
 
 /* Dragging states */
@@ -180,62 +202,13 @@ body,
     transform: scale(1.02) !important;
 }
 
-/* Selected component in edit mode */
-.component-container.selected {
-    outline: 2px solid #3b82f6 !important;
-    z-index: 5 !important;
-    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3) !important;
+/* Drop indicators */
+.drop-highlight {
+    outline: 2px dashed #64a573 !important;
+    background-color: rgba(100, 165, 115, 0.1) !important;
+    transition: all 0.15s ease;
 }
 
-/* Component hover in edit mode */
-[data-widget-id][data-edit-mode="true"] .component-container:hover {
-    outline: 1px solid rgba(59, 130, 246, 0.3);
-}
-
-/* Grid layout for containers */
-.grid-layout-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-    grid-gap: 8px;
-    width: 100%;
-}
-
-/* Flex layout for container children */
-.flex-layout-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-}
-
-/* Container children styling */
-.container-children {
-    width: 100%;
-    padding: 8px;
-    padding-bottom: 0; /* Compensate for child margins */
-    transition: all 0.2s ease;
-}
-
-/* Panel and ScrollBox in view mode */
-[data-widget-id]:not([data-edit-mode="true"]) [data-component-type="Panel"] {
-    border: 1px solid rgba(180, 180, 180, 0.2);
-    border-radius: 4px;
-    margin-bottom: 8px;
-}
-
-/* Component width */
-[data-component-id] {
-    width: 100%;
-}
-
-/* Panel/ScrollBox minimum dimensions */
-[data-component-type="Panel"] > div,
-[data-component-type="ScrollBox"] > div {
-    min-width: 100px;
-    min-height: 60px;
-}
-
-/* Drop indicator styles */
 .drop-indicator {
     pointer-events: none !important;
     z-index: 1000 !important;
@@ -243,7 +216,6 @@ body,
     transition: all 0.15s ease-in-out !important;
 }
 
-/* Horizontal drop indicator */
 .drop-indicator-horizontal {
     left: 0 !important;
     right: 0 !important;
@@ -251,7 +223,6 @@ body,
     background-color: #3b82f6 !important;
 }
 
-/* Vertical drop indicator */
 .drop-indicator-vertical {
     top: 0 !important;
     bottom: 0 !important;
@@ -259,24 +230,11 @@ body,
     background-color: #3b82f6 !important;
 }
 
-/* Inside container drop indicator */
 .drop-indicator-inside {
     inset: 0 !important;
     border: 2px dashed #3b82f6 !important;
     background-color: rgba(59, 130, 246, 0.1) !important;
     border-radius: 4px !important;
-}
-
-/* Root vs nested components */
-.root-component {
-    /* Styling for top-level components */
-}
-
-.nested-component {
-    /* Specific styling for nested components */
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    width: 100% !important;
 }
 
 /* Focus outline for keyboard navigation */
@@ -285,14 +243,77 @@ body,
     outline-offset: 2px !important;
 }
 
-/* Auto-sizing container for edit mode */
+/* Auto-sizing for edit mode */
 [data-widget-id][data-edit-mode="true"] .widget-content-container {
     height: auto !important;
     min-height: 100px !important;
 }
 
-/* Fix the widget sizing to allow growth in edit mode */
 [data-widget-id][data-edit-mode="true"] {
     height: auto !important; /* Allow height to grow */
     min-height: 200px !important;
+}
+
+/* Component container class identifiers */
+.is-container {
+    min-height: 40px;
+    transition: all 0.15s ease-in-out;
+}
+
+.is-container.empty {
+    border: 1px dashed rgba(100, 100, 100, 0.3);
+    padding: 10px;
+}
+
+/* Ensure nested components remain interactive at any depth */
+.component-container .component-container {
+    position: relative !important;
+    pointer-events: auto !important;
+    z-index: 1;
+}
+
+/* Ensure nested containers are visibly identifiable */
+.component-container[data-is-container="true"] {
+    min-height: 60px;
+    border: 1px dashed rgba(100, 100, 100, 0.2);
+}
+
+/* Enhanced drop target visualization */
+[data-edit-mode="true"] .component-container[data-is-container="true"]:hover {
+    outline: 2px dashed rgba(100, 165, 115, 0.6) !important;
+    background-color: rgba(100, 165, 115, 0.05) !important;
+    transition: all 0.15s ease;
+}
+
+/* Clearer highlight for nested drop targets */
+.drop-highlight.component-container {
+    outline: 2px dashed #64a573 !important;
+    background-color: rgba(100, 165, 115, 0.15) !important;
+    box-shadow: inset 0 0 10px rgba(100, 165, 115, 0.2) !important;
+}
+
+/* Selected component - give it more visible emphasis */
+.component-container.selected {
+    outline: 2px solid #3b82f6 !important;
+    z-index: 10 !important; /* Higher z-index to appear on top */
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5),
+        0 0 8px rgba(59, 130, 246, 0.3) !important;
+}
+
+/* Style for nested component headers - subtle indicator of nesting */
+.component-container[data-nested="true"] > .panel-header,
+.component-container[data-nested="true"] > div > .panel-header {
+    background-color: rgba(0, 0, 0, 0.1);
+    border-bottom: 1px dashed rgba(100, 100, 100, 0.2);
+}
+
+/* Delete button for nested components */
+.component-container[data-edit-mode="true"]
+    .component-container.selected
+    .delete-button {
+    display: block !important;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 100;
 }

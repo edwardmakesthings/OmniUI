@@ -1,5 +1,3 @@
-// src/registry/ComponentRenderers.ts
-import { Fragment } from "react";
 import {
     Panel,
     ScrollBox,
@@ -14,13 +12,31 @@ import {
     ComponentRenderProps,
     useComponentRegistry,
 } from "./componentRegistry";
+import {
+    ButtonIcon,
+    InputIcon,
+    LabelIcon,
+    PanelIcon,
+    WidgetIcon,
+} from "@/components/ui";
+import { IconProps } from "@/lib/icons/types";
+
+// Map component types to icons
+export const componentIconMap: Record<string, React.FC<IconProps>> = {
+    Widget: WidgetIcon,
+    Panel: PanelIcon,
+    ScrollBox: PanelIcon,
+    PushButton: ButtonIcon,
+    Input: InputIcon,
+    Label: LabelIcon,
+};
+
+export const DefaultComponentIcon = PanelIcon;
 
 /**
- * Component renderers for all supported component types
- * Moved from componentResolver.tsx into a centralized registry
+ * Panel component renderer
+ * Renders a Panel component with proper children handling
  */
-
-// Panel component renderer
 export const PanelRenderer: ComponentRenderer = ({
     instance,
     children,
@@ -28,6 +44,7 @@ export const PanelRenderer: ComponentRenderer = ({
     actionHandler,
     isEditMode,
     isSelected,
+    onSelect,
 }) => {
     // Check if this panel has any children
     const hasChildren = Array.isArray(children) && children.length > 0;
@@ -39,9 +56,6 @@ export const PanelRenderer: ComponentRenderer = ({
               minHeight: "100px",
           }
         : {};
-
-    // Adjust padding based on whether there are children
-    const contentPadding = hasChildren ? "p-0" : "p-4";
 
     return (
         <Panel
@@ -57,14 +71,21 @@ export const PanelRenderer: ComponentRenderer = ({
             data-has-children={hasChildren ? "true" : "false"}
             data-edit-mode={isEditMode ? "true" : "false"}
             data-selected={isSelected ? "true" : "false"}
+            data-instance-id={instance.id}
             style={defaultPanelStyle}
-            className={`w-full ${isSelected ? "selected-component" : ""}`}
+            className={`panel-component w-full ${
+                isSelected ? "selected-component" : ""
+            }`}
+            onClick={(e) => {
+                if (onSelect && e.currentTarget === e.target) {
+                    e.stopPropagation();
+                    onSelect(instance.id);
+                }
+            }}
         >
-            <div className={contentPadding}>
+            <div className={hasChildren ? "p-0" : "p-4"}>
                 {hasChildren ? (
-                    // Important: Make sure children are visible and properly formatted
-                    <div className="panel-children-container w-full p-2">
-                        {/* Map through children to ensure they're all displayed */}
+                    <div className="panel-children-container w-full">
                         {Array.isArray(children)
                             ? children.map((child, index) => (
                                   <div
@@ -90,7 +111,10 @@ export const PanelRenderer: ComponentRenderer = ({
     );
 };
 
-// ScrollBox component renderer
+/**
+ * ScrollBox component renderer
+ * Renders a ScrollBox component with proper children handling
+ */
 export const ScrollBoxRenderer: ComponentRenderer = ({
     instance,
     children,
@@ -98,6 +122,7 @@ export const ScrollBoxRenderer: ComponentRenderer = ({
     actionHandler,
     isEditMode,
     isSelected,
+    onSelect,
 }) => {
     // Check if this scrollbox has any children
     const hasChildren = Array.isArray(children) && children.length > 0;
@@ -130,12 +155,30 @@ export const ScrollBoxRenderer: ComponentRenderer = ({
             data-has-children={hasChildren ? "true" : "false"}
             data-edit-mode={isEditMode ? "true" : "false"}
             data-selected={isSelected ? "true" : "false"}
+            data-instance-id={instance.id}
             style={defaultStyle}
-            className={`relative ${isSelected ? "selected-component" : ""}`}
+            className={`scrollbox-component relative ${
+                isSelected ? "selected-component" : ""
+            }`}
+            onClick={(e) => {
+                if (onSelect && e.currentTarget === e.target) {
+                    e.stopPropagation();
+                    onSelect(instance.id);
+                }
+            }}
         >
             {hasChildren ? (
-                <div className="scrollbox-children-container p-2">
-                    {children}
+                <div className="scrollbox-children-container">
+                    {Array.isArray(children)
+                        ? children.map((child, index) => (
+                              <div
+                                  key={index}
+                                  className="scrollbox-child-wrapper w-full mb-2"
+                              >
+                                  {child}
+                              </div>
+                          ))
+                        : children}
                 </div>
             ) : (
                 <div className="text-center text-font-dark-muted text-sm p-4">
@@ -150,18 +193,29 @@ export const ScrollBoxRenderer: ComponentRenderer = ({
     );
 };
 
-// PushButton component renderer
+/**
+ * PushButton component renderer
+ */
 export const PushButtonRenderer: ComponentRenderer = ({
     instance,
     actionHandler,
     widgetId,
     isEditMode,
     isSelected,
+    onSelect,
 }) => (
     <PushButton
         variant={instance.overrides?.style?.variant || "default"}
-        onClick={() => {
-            // Handle button click actions if specified in the component
+        onClick={(e) => {
+            e.stopPropagation(); // Prevent event bubbling
+
+            // Handle selection
+            if (isEditMode && onSelect) {
+                onSelect(instance.id);
+                return;
+            }
+
+            // Handle button click actions if specified
             if (actionHandler && instance.actionBindings) {
                 const targetAction = instance.actionBindings.action;
                 const targetId = instance.actionBindings.targetWidgetId;
@@ -175,6 +229,7 @@ export const PushButtonRenderer: ComponentRenderer = ({
         data-component-type="PushButton"
         data-edit-mode={isEditMode ? "true" : "false"}
         data-selected={isSelected ? "true" : "false"}
+        data-instance-id={instance.id}
         className={isSelected ? "selected-component" : ""}
     >
         {instance.overrides?.content?.properties?.text?.value ||
@@ -183,91 +238,142 @@ export const PushButtonRenderer: ComponentRenderer = ({
     </PushButton>
 );
 
-// Input component renderer
+/**
+ * Input component renderer
+ */
 export const InputRenderer: ComponentRenderer = ({
     instance,
     isEditMode,
     isSelected,
+    onSelect,
 }) => (
-    <Input
-        variant={instance.overrides?.style?.variant || "default"}
-        placeholder={
-            instance.overrides?.content?.properties?.placeholder?.value ||
-            "Enter text..."
-        }
-        defaultValue={
-            instance.overrides?.content?.properties?.defaultValue?.value || ""
-        }
-        data-component-id={instance.id}
-        data-component-type="Input"
-        data-edit-mode={isEditMode ? "true" : "false"}
-        data-selected={isSelected ? "true" : "false"}
-        className={isSelected ? "selected-component" : ""}
-    />
+    <div
+        onClick={(e) => {
+            e.stopPropagation();
+            if (isEditMode && onSelect) {
+                onSelect(instance.id);
+            }
+        }}
+        className={`input-wrapper ${isSelected ? "selected-component" : ""}`}
+    >
+        <Input
+            variant={instance.overrides?.style?.variant || "default"}
+            placeholder={
+                instance.overrides?.content?.properties?.placeholder?.value ||
+                "Enter text..."
+            }
+            defaultValue={
+                instance.overrides?.content?.properties?.defaultValue?.value ||
+                ""
+            }
+            readOnly={isEditMode}
+            data-component-id={instance.id}
+            data-component-type="Input"
+            data-edit-mode={isEditMode ? "true" : "false"}
+            data-selected={isSelected ? "true" : "false"}
+            data-instance-id={instance.id}
+        />
+    </div>
 );
 
-// DropdownButton component renderer
+/**
+ * DropdownButton component renderer
+ */
 export const DropdownButtonRenderer: ComponentRenderer = ({
     instance,
     isEditMode,
     isSelected,
+    onSelect,
 }) => (
-    <DropdownButton
-        variant={instance.overrides?.style?.variant || "default"}
-        label={instance.label || "Dropdown"}
-        options={
-            instance.overrides?.content?.properties?.options?.value || [
-                { label: "Option 1", value: "1" },
-                { label: "Option 2", value: "2" },
-            ]
-        }
-        data-component-id={instance.id}
-        data-component-type="DropdownButton"
-        data-edit-mode={isEditMode ? "true" : "false"}
-        data-selected={isSelected ? "true" : "false"}
-        className={isSelected ? "selected-component" : ""}
-    />
+    <div
+        onClick={(e) => {
+            e.stopPropagation();
+            if (isEditMode && onSelect) {
+                onSelect(instance.id);
+            }
+        }}
+        className={`dropdown-wrapper ${isSelected ? "selected-component" : ""}`}
+    >
+        <DropdownButton
+            variant={instance.overrides?.style?.variant || "default"}
+            label={instance.label || "Dropdown"}
+            options={
+                instance.overrides?.content?.properties?.options?.value || [
+                    { label: "Option 1", value: "1" },
+                    { label: "Option 2", value: "2" },
+                ]
+            }
+            data-component-id={instance.id}
+            data-component-type="DropdownButton"
+            data-edit-mode={isEditMode ? "true" : "false"}
+            data-selected={isSelected ? "true" : "false"}
+            data-instance-id={instance.id}
+        />
+    </div>
 );
 
-// Tabs component renderer
+/**
+ * Tabs component renderer
+ */
 export const TabsRenderer: ComponentRenderer = ({
     instance,
     children,
     isEditMode,
     isSelected,
+    onSelect,
 }) => (
-    <Tabs
-        variant={instance.overrides?.style?.variant || "default"}
-        tabs={
-            instance.overrides?.content?.properties?.tabs?.value || [
-                { id: "tab1", label: "Tab 1", content: "Tab 1 content" },
-                { id: "tab2", label: "Tab 2", content: "Tab 2 content" },
-            ]
-        }
-        data-component-id={instance.id}
-        data-component-type="Tabs"
-        data-edit-mode={isEditMode ? "true" : "false"}
-        data-selected={isSelected ? "true" : "false"}
-        className={isSelected ? "selected-component" : ""}
+    <div
+        onClick={(e) => {
+            e.stopPropagation();
+            if (isEditMode && onSelect) {
+                onSelect(instance.id);
+            }
+        }}
+        className={`tabs-wrapper ${isSelected ? "selected-component" : ""}`}
     >
-        {children}
-    </Tabs>
+        <Tabs
+            variant={instance.overrides?.style?.variant || "default"}
+            tabs={
+                instance.overrides?.content?.properties?.tabs?.value || [
+                    { id: "tab1", label: "Tab 1", content: "Tab 1 content" },
+                    { id: "tab2", label: "Tab 2", content: "Tab 2 content" },
+                ]
+            }
+            data-component-id={instance.id}
+            data-component-type="Tabs"
+            data-edit-mode={isEditMode ? "true" : "false"}
+            data-selected={isSelected ? "true" : "false"}
+            data-instance-id={instance.id}
+        >
+            {children}
+        </Tabs>
+    </div>
 );
 
-// Label component renderer
+/**
+ * Label component renderer
+ */
 export const LabelRenderer: ComponentRenderer = ({
     instance,
     isEditMode,
     isSelected,
+    onSelect,
 }) => (
     <div
-        className={`p-2 ${instance.overrides?.style?.className || ""} ${
-            isSelected ? "selected-component" : ""
-        }`}
+        className={`label-component ${
+            instance.overrides?.style?.className || ""
+        } ${isSelected ? "selected-component" : ""}`}
         data-component-id={instance.id}
         data-component-type="Label"
         data-edit-mode={isEditMode ? "true" : "false"}
         data-selected={isSelected ? "true" : "false"}
+        data-instance-id={instance.id}
+        onClick={(e) => {
+            e.stopPropagation();
+            if (isEditMode && onSelect) {
+                onSelect(instance.id);
+            }
+        }}
     >
         {instance.overrides?.content?.properties?.text?.value ||
             instance.label ||
@@ -290,38 +396,19 @@ export function registerComponentRenderers() {
     );
     registry.registerRenderer(ComponentTypeValues.Input, InputRenderer);
     registry.registerRenderer(
-        ComponentTypeValues.DropdownButton,
+        ComponentTypeValues.Dropdown,
         DropdownButtonRenderer
     );
     registry.registerRenderer(ComponentTypeValues.Tabs, TabsRenderer);
     registry.registerRenderer(ComponentTypeValues.Label, LabelRenderer);
 
-    console.log("Registered component renderers");
-}
+    // Verify registrations
+    const renderers = Object.entries(registry.renderers).map(
+        ([type, renderer]) => ({
+            type,
+            hasRenderer: !!renderer,
+        })
+    );
 
-/**
- * Public render function that uses the registry to render any component
- */
-export function renderComponent(
-    instance: any,
-    props: Omit<ComponentRenderProps, "instance">
-) {
-    if (!instance) return <Fragment />;
-
-    const registry = useComponentRegistry.getState();
-    return registry.renderComponent(instance, props);
-}
-
-/**
- * Public render function that renders a component and its children
- */
-export function renderComponentHierarchy(
-    instance: any,
-    widgetId: any,
-    props: Omit<ComponentRenderProps, "instance" | "widgetId">
-) {
-    if (!instance || !widgetId) return <Fragment />;
-
-    const registry = useComponentRegistry.getState();
-    return registry.renderComponentHierarchy(instance, widgetId, props);
+    console.log("Registered component renderers:", renderers);
 }

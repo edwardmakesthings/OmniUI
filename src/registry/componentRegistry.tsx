@@ -5,9 +5,14 @@ import { registerDisplayComponents } from "./categories/displayComponents";
 import { ComponentInstance } from "@/core/base/ComponentInstance";
 import { EntityId } from "@/core/types/EntityTypes";
 import { ReactElement, ReactNode } from "react";
-import { ComponentType } from "@/core/types/ComponentTypes";
+import {
+    ComponentType,
+    ComponentTypeValues,
+} from "@/core/types/ComponentTypes";
 import { create } from "zustand";
-import { WidgetComponent } from "@/store/widgetStore";
+import { useWidgetStore } from "@/store/widgetStore";
+import { cn } from "@/lib/utils";
+import { ComponentWithDragDrop } from "./ComponentWithDragDrop";
 // import { APP_VERSION } from '@/config/appConfig';
 
 // Registry state tracking
@@ -22,6 +27,7 @@ export interface ComponentRenderProps {
     isEditMode?: boolean;
     isSelected?: boolean;
     onSelect?: (id: EntityId) => void;
+    onDelete?: (id: EntityId) => void;
 }
 
 // Component renderer function type
@@ -37,6 +43,16 @@ export const defaultRenderer: ComponentRenderer = ({ instance }) => (
     </div>
 );
 
+// Render options for the component hierarchy
+export interface ComponentRenderOptions {
+    isEditMode?: boolean;
+    isSelected?: boolean;
+    onSelect?: (id: EntityId, e?: MouseEvent) => void;
+    onDelete?: (id: EntityId, e?: MouseEvent) => void;
+    actionHandler?: (action: string, targetId?: EntityId) => void;
+    dragDropEnabled?: boolean;
+}
+
 // Registry state interface
 interface ComponentRegistryState {
     // Component renderers mapped by type
@@ -50,16 +66,18 @@ interface ComponentRegistryState {
         type: ComponentType | string,
         renderer: ComponentRenderer
     ) => void;
+
     renderComponent: (
         instance: ComponentInstance,
         props: Omit<ComponentRenderProps, "instance">
     ) => ReactElement | null;
 
-    // Method to render a component hierarchy with parent-child relationships
+    // Enhanced method to render a component hierarchy with drag-drop support
     renderComponentHierarchy: (
-        instance: ComponentInstance,
+        instanceId: EntityId,
         widgetId: EntityId,
-        props: Omit<ComponentRenderProps, "instance" | "widgetId">
+        options: ComponentRenderOptions,
+        selectedComponentId?: EntityId
     ) => ReactElement | null;
 
     // Initialization
@@ -143,16 +161,16 @@ async function loadSystemComponents() {
 //     return component;
 // }
 
-/**
- * Placeholder for future user component loading
- */
-async function loadUserComponentsForUser(userId: string): Promise<any[]> {
-    // This is a placeholder that will be implemented in the future
-    console.log(
-        `Loading user components for ${userId} will be implemented in a future version`
-    );
-    return [];
-}
+// /**
+//  * Placeholder for future user component loading
+//  */
+// async function loadUserComponentsForUser(userId: string): Promise<any[]> {
+//     // This is a placeholder that will be implemented in the future
+//     console.log(
+//         `Loading user components for ${userId} will be implemented in a future version`
+//     );
+//     return [];
+// }
 
 /**
  * Initialize registry with default components
@@ -203,26 +221,6 @@ export async function saveComponentRegistry() {
     }
 }
 
-/**
- * Hook for components to access registry functionality
- */
-// export function useComponentRegistry() {
-//     // Memoize these functions to prevent recreation on every render
-//     const loadRegistry = loadComponentRegistry;
-//     const saveRegistry = saveComponentRegistry;
-//     const initializeDefaults = initializeDefaultComponents;
-//     const loadUserComponents = loadUserComponentsForUser;
-
-//     return {
-//         isInitialized: registryInitialized,
-//         loadRegistry,
-//         saveRegistry,
-//         initializeDefaults,
-//         // Doesn't currently do anything, placeholder for future
-//         loadUserComponents,
-//     };
-// }
-
 // Create the registry store
 export const useComponentRegistry = create<ComponentRegistryState>(
     (set, get) => ({
@@ -244,17 +242,18 @@ export const useComponentRegistry = create<ComponentRegistryState>(
                     "Attempted to render null/undefined component instance"
                 );
                 return (
-                    <div className="text-red-500">
-                        {" "}
-                        Error: Missing component{" "}
-                    </div>
+                    <div className="text-red-500">Error: Missing component</div>
                 );
             }
 
+            // Get the correct renderer for this component type
             const { renderers } = get();
+
+            // Use the specific renderer or fall back to default
             const renderer = renderers[instance.type] || defaultRenderer;
 
-            console.log(`Rendering component of type: ${instance.type}`);
+            // Log renderer selection for debugging
+            // console.log(`Using renderer for type: ${componentType}, found: ${Boolean(renderers[componentType])}`);
 
             return renderer({
                 instance,
@@ -262,118 +261,151 @@ export const useComponentRegistry = create<ComponentRegistryState>(
             });
         },
 
-        renderComponentHierarchy: (instance, widgetId, props) => {
-            if (!instance) {
-                console.warn(
-                    "Attempted to render null/undefined component instance in hierarchy"
-                );
-                return (
-                    <div className="text-red-500">
-                        {" "}
-                        Error: Missing component{" "}
-                    </div>
-                );
-            }
+        renderComponentHierarchy: (
+            instanceId: EntityId,
+            widgetId: EntityId,
+            options: ComponentRenderOptions,
+            selectedComponentId?: EntityId
+        ) => {
+            const {
+                isEditMode = false,
+                isSelected = false,
+                onSelect,
+                onDelete,
+                actionHandler,
+                dragDropEnabled = true,
+            } = options;
 
-            // Get the registry functions
-            const { renderComponent } = get();
-
-            // Get necessary stores
-            const widgetStore = window.__WIDGET_STORE__?.getState();
+            const widgetStore = useWidgetStore.getState();
             const componentStore = useComponentStore.getState();
 
-            if (!widgetStore) {
-                // If widget store is not available, render component without hierarchy
-                return renderComponent(instance, { widgetId, ...props });
-            }
+            try {
+                // Get the widget
+                const widget = widgetStore.getWidget(widgetId);
+                if (!widget) {
+                    console.warn(`Widget ${widgetId} not found`);
+                    return null;
+                }
 
-            const widget = widgetStore.getWidget(widgetId);
-            if (!widget) {
-                // If widget not found, render component without hierarchy
-                return renderComponent(instance, { widgetId, ...props });
-            }
+                // Get the component instance
+                let instance;
+                try {
+                    instance = componentStore.getInstance(instanceId);
+                } catch (error) {
+                    console.warn(`Component instance ${instanceId} not found`);
+                    return null;
+                }
 
-            // Find the widget component that corresponds to this instance
-            const widgetComponent = widget.components.find(
-                (comp: WidgetComponent) => comp.instanceId === instance.id
-            );
+                // Find the widget component reference
+                const widgetComponent = widget.components.find(
+                    (c) => c.instanceId === instanceId
+                );
+                if (!widgetComponent) {
+                    console.warn(
+                        `Widget component reference for ${instanceId} not found`
+                    );
+                    return null;
+                }
 
-            if (!widgetComponent) {
-                // If component not in widget, render it alone
-                return renderComponent(instance, { widgetId, ...props });
-            }
+                // Determine if this component should be selected
+                // First check if this component matches the selected ID directly
+                const componentId = widgetComponent.id;
+                const thisComponentSelected = selectedComponentId
+                    ? componentId === selectedComponentId
+                    : isSelected;
 
-            // Find direct children of this component in the widget
-            const childComponents = widget.components.filter(
-                (comp: WidgetComponent) => comp.parentId === widgetComponent.id
-            );
+                // Log selection state for debugging
+                if (thisComponentSelected) {
+                    console.log(`Component ${componentId} is selected!`);
+                }
 
-            if (childComponents.length === 0) {
-                // No children, render component by itself
-                return renderComponent(instance, { widgetId, ...props });
-            }
+                // Determine if this is a container component
+                const isContainer =
+                    instance.type === ComponentTypeValues.Panel ||
+                    instance.type === ComponentTypeValues.ScrollBox;
 
-            // Process direct children
-            const childElements = childComponents
-                .sort(
-                    (a: WidgetComponent, b: WidgetComponent) =>
-                        a.zIndex - b.zIndex
-                ) // Sort by z-index
-                .map((childComp: WidgetComponent) => {
-                    try {
-                        // Get the instance for this child
-                        const childInstance = componentStore.getInstance(
-                            childComp.instanceId
-                        );
+                // Get child components
+                const childComponents = widget.components
+                    .filter((c) => c.parentId === widgetComponent.id)
+                    .sort((a, b) => a.zIndex - b.zIndex);
 
-                        if (!childInstance) {
-                            console.warn(
-                                `Could not find instance for component ${childComp.id}`
+                // Recursively render child components
+                const renderedChildren = childComponents
+                    .map((childComp) => {
+                        try {
+                            return get().renderComponentHierarchy(
+                                childComp.instanceId,
+                                widgetId,
+                                {
+                                    ...options,
+                                    isSelected: false, // Always default to false; selection is determined inside
+                                },
+                                selectedComponentId
+                            );
+                        } catch (error) {
+                            console.error(
+                                `Error rendering child component ${childComp.id}:`,
+                                error
                             );
                             return null;
                         }
+                    })
+                    .filter(Boolean);
 
-                        // Recursively render child (it will handle its own children)
-                        return (
+                // Child container class based on component type
+                const childContainerClass = isContainer
+                    ? instance.type === ComponentTypeValues.Panel
+                        ? "panel-children-container"
+                        : "scrollbox-children-container"
+                    : "";
+
+                // Use ComponentWithDragDrop as a wrapper
+                return (
+                    <ComponentWithDragDrop
+                        key={widgetComponent.id}
+                        instance={instance}
+                        widgetComponent={widgetComponent}
+                        widgetId={widgetId}
+                        isContainer={isContainer}
+                        isSelected={thisComponentSelected}
+                        isEditMode={isEditMode}
+                        onSelect={onSelect}
+                        onDelete={onDelete}
+                        actionHandler={actionHandler}
+                        dragDropEnabled={dragDropEnabled && isEditMode}
+                        parentId={widgetComponent.parentId}
+                        renderComponent={get().renderComponent}
+                    >
+                        {renderedChildren.length > 0 && isContainer && (
                             <div
-                                key={childComp.id}
-                                className="relative mb-2 panel-child-item w-full"
-                                data-component-id={childComp.id}
-                                data-component-type={childInstance.type}
-                                data-instance-id={childInstance.id}
-                            >
-                                {get().renderComponentHierarchy(
-                                    childInstance,
-                                    widgetId,
-                                    props
+                                className={cn(
+                                    "relative",
+                                    childContainerClass,
+                                    "flex flex-col gap-2 p-2 min-h-[50px] w-full"
                                 )}
+                                data-children-container="true"
+                                data-parent-id={widgetComponent.id}
+                                data-component-type={instance.type}
+                            >
+                                {renderedChildren}
                             </div>
-                        );
-                    } catch (error) {
-                        console.error(
-                            `Error rendering child component ${childComp.id}:`,
-                            error
-                        );
-                        return null;
-                    }
-                })
-                .filter(Boolean); // Remove any nulls from failed rendering
-
-            // Finally, render this component with its processed children
-            return renderComponent(instance, {
-                widgetId,
-                ...props,
-                children: childElements.length > 0 ? childElements : undefined,
-            });
+                        )}
+                    </ComponentWithDragDrop>
+                );
+            } catch (error) {
+                console.error(
+                    `Error rendering component hierarchy for ${instanceId}:`,
+                    error
+                );
+                return null;
+            }
         },
 
         initialize: () => {
             if (get().isInitialized) return;
 
             // Set global reference for cross-store access
-            // This is a workaround for circular dependencies
             window.__COMPONENT_REGISTRY__ = get();
-
             set({ isInitialized: true });
         },
     })
