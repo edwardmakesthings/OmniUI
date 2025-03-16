@@ -296,6 +296,20 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
                 </button>
             )}
 
+            {process.env.NODE_ENV !== "production" && (
+                <div
+                    className="absolute top-0 left-0 bg-gray-900 text-white text-xs px-1 py-0.5 rounded opacity-70 z-50"
+                    style={{ fontSize: "8px", pointerEvents: "none" }}
+                >
+                    ID: {widgetComponent.id.split("-")[1]}
+                    {isDragging && " (dragging)"}
+                    {isSelected && " (selected)"}
+                    <span className="ml-1 text-yellow-400">
+                        z:{widgetComponent.zIndex}
+                    </span>
+                </div>
+            )}
+
             {/* Container for children - only render if this is a container AND has children */}
             {/* {isContainer && children && Children.count(children) > 0 && (
                 <div

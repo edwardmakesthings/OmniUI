@@ -9,6 +9,7 @@ import { componentIconMap } from "@/registry/componentRenderers";
 import { PushButton } from "@/components/ui/atoms";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import eventBus from "@/core/eventBus/eventBus";
+import { builderService } from "@/store";
 
 const LayoutPanel = () => {
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
@@ -19,9 +20,11 @@ const LayoutPanel = () => {
     // State for tracking expanded items in tree view
     const [expandedIds, setExpandedIds] = useState<string[]>([]);
     const [forceRender, setForceRender] = useState(0);
+    const [isProcessingDrag, setIsProcessingDrag] = useState(false);
 
     // Track initial expansion
     const initialExpansionRef = useRef(false);
+    const hierarchyDataRef = useRef<any[]>([]);
 
     // Get selected component info from selection store
     const selectedTreeItem = useMemo(() => {
@@ -118,20 +121,29 @@ const LayoutPanel = () => {
     useEventSubscription(
         "component:added",
         (event) => {
-            // console.log(
-            //     "Layout panel received component addition:",
-            //     event.data
-            // );
             setForceRender((prev) => prev + 1);
 
-            // Auto-expand the parent widget
+            // Auto-expand the parent widget and parent component if applicable
             if (event.data?.widgetId) {
-                const { widgetId } = event.data;
+                const { widgetId, parentId } = event.data;
+
                 setExpandedIds((prev) => {
-                    if (!prev.includes(widgetId)) {
-                        return [...prev, widgetId];
+                    let newExpanded = [...prev];
+
+                    // Add widget ID if not already expanded
+                    if (!newExpanded.includes(widgetId)) {
+                        newExpanded.push(widgetId);
                     }
-                    return prev;
+
+                    // Add parent component ID if applicable
+                    if (parentId) {
+                        const parentItemId = `${widgetId}/${parentId}`;
+                        if (!newExpanded.includes(parentItemId)) {
+                            newExpanded.push(parentItemId);
+                        }
+                    }
+
+                    return newExpanded;
                 });
             }
         },
@@ -165,104 +177,245 @@ const LayoutPanel = () => {
         []
     );
 
-    // Build tree data for widgets and their components
-    const treeData = useMemo(() => {
-        try {
-            return widgets.map((widget) => {
-                // Get the component hierarchy for this widget
-                const hierarchy = widgetStore.getComponentHierarchy(widget.id);
-                // The hierarchy already includes the widget as the first item
-                // Just return the first element from the hierarchy array
-                if (hierarchy.length > 0) {
-                    return hierarchy[0];
-                }
+    // Handle component reordering
+    useEventSubscription(
+        "component:reordered",
+        () => {
+            setForceRender((prev) => prev + 1);
+        },
+        []
+    );
 
-                // Fallback in case the hierarchy is empty
-                return {
-                    id: widget.id,
-                    label: widget.label || "Widget",
-                    icon: componentIconMap.Widget || WidgetIcon,
-                    children: [],
-                    canDrop: true,
-                    canDrag: false,
-                };
-            });
-        } catch (err) {
-            console.error("Error building tree data:", err);
-            return [];
-        }
+    // Fetch all widget hierarchies asynchronously
+    useEffect(() => {
+        // Skip if there are no widgets
+        if (widgets.length === 0) return;
+
+        const fetchAllHierarchies = async () => {
+            const hierarchies = await Promise.all(
+                widgets.map(async (widget) => {
+                    try {
+                        const hierarchy =
+                            await widgetStore.getComponentHierarchy(widget.id);
+                        return hierarchy[0] || null;
+                    } catch (error) {
+                        console.error(
+                            `Error fetching hierarchy for widget ${widget.id}:`,
+                            error
+                        );
+                        return null;
+                    }
+                })
+            );
+
+            // Filter out null values and update state
+            const validHierarchies = hierarchies.filter((h) => h !== null);
+            hierarchyDataRef.current = validHierarchies;
+            setForceRender((prev) => prev + 1);
+        };
+
+        fetchAllHierarchies();
     }, [widgets, widgetStore, forceRender]);
 
-    // Handle tree item movement
+    // Build tree data for widgets and their components
+    const treeData = useMemo(() => {
+        // Use the pre-fetched hierarchy data if available
+        if (hierarchyDataRef.current.length > 0) {
+            return hierarchyDataRef.current;
+        }
+
+        // Default fallback if hierarchy data isn't available yet
+        return widgets.map((widget) => ({
+            id: widget.id,
+            label: widget.label || "Widget",
+            icon: componentIconMap.Widget || WidgetIcon,
+            children: [],
+            canDrop: true,
+            canDrag: false,
+        }));
+    }, [widgets, forceRender]);
+
+    // Handle tree item movement - completely rewritten to use array-based ordering
     const handleTreeMove = useCallback(
-        (items) => {
-            if (!items.length || !items[0].id) return;
+        async (items) => {
+            if (isProcessingDrag || !items.length || !items[0].id) return;
 
-            // Extract widget ID from the first element
-            const widgetId = items[0].id as EntityId;
-            const widget = widgetStore.getWidget(widgetId);
-            if (!widget) return;
+            setIsProcessingDrag(true);
 
-            // Process the updated tree structure
-            const processUpdatedHierarchy = (
-                treeItems,
-                parentId = undefined
-            ) => {
-                treeItems.forEach((item, index) => {
-                    // Skip widget items
-                    if (!item.id.includes("/")) {
-                        if (item.children) {
-                            processUpdatedHierarchy(item.children);
+            try {
+                // Find the modified widget (first level items are widgets)
+                const widgetId = items[0].id.split("/")[0] as EntityId;
+                const widget = widgetStore.getWidget(widgetId);
+                if (!widget) {
+                    console.error("Widget not found:", widgetId);
+                    return;
+                }
+
+                console.log(
+                    "Processing hierarchy update for widget:",
+                    widgetId
+                );
+
+                // Used to track which components we've processed to avoid duplicates
+                const processedComponents = new Set<EntityId>();
+
+                // Recursive function to process the tree structure
+                const processTreeItems = async (
+                    treeItems,
+                    containerId: EntityId = widgetId
+                ) => {
+                    // Process root-level children if this is a widget
+                    if (!treeItems[0]?.id.includes("/")) {
+                        // This is a widget, process its children
+                        if (treeItems[0]?.children?.length) {
+                            await processTreeItems(
+                                treeItems[0].children,
+                                widgetId
+                            );
                         }
                         return;
                     }
 
-                    // Extract component ID from combined ID (format: widgetId/componentId)
-                    const [, componentId] = item.id.split("/") as [
-                        string,
-                        EntityId
-                    ];
+                    // Process each child in order
+                    for (let i = 0; i < treeItems.length; i++) {
+                        const item = treeItems[i];
 
-                    // Find the component in the widget
-                    const component = widget.components.find(
-                        (c) => c.id === componentId
-                    );
-                    if (!component) return;
+                        // Skip if we've already processed this component
+                        const [, componentId] = item.id.split("/") as [
+                            string,
+                            EntityId
+                        ];
+                        if (processedComponents.has(componentId)) continue;
 
-                    // Update parent and z-index if needed
-                    if (
-                        component.parentId !== parentId ||
-                        component.zIndex !== index
-                    ) {
-                        // Move component to new parent if needed
-                        if (component.parentId !== parentId) {
-                            widgetStore.moveComponent(
-                                widgetId,
-                                componentId,
-                                parentId
+                        // Mark as processed
+                        processedComponents.add(componentId);
+
+                        const component = widget.components.find(
+                            (c) => c.id === componentId
+                        );
+                        if (!component) {
+                            console.warn(
+                                `Component ${componentId} not found in widget ${widgetId}`
                             );
+                            continue;
                         }
 
-                        // Update z-index to match tree order
-                        widgetStore.updateComponent(widgetId, componentId, {
-                            zIndex: index,
-                        });
-                    }
+                        // Get the previous component in the list for ordering
+                        let targetId: EntityId | null = null;
+                        let position: "before" | "after" = "after";
 
-                    // Process children recursively
-                    if (item.children) {
-                        processUpdatedHierarchy(item.children, componentId);
+                        if (i > 0) {
+                            // Get the previous component in the list
+                            const [, prevComponentId] = treeItems[
+                                i - 1
+                            ].id.split("/") as [string, EntityId];
+                            targetId = prevComponentId;
+                            position = "after";
+                        } else if (i === 0 && treeItems.length > 1) {
+                            // First item - position before the next item
+                            const [, nextComponentId] = treeItems[
+                                i + 1
+                            ].id.split("/") as [string, EntityId];
+                            targetId = nextComponentId;
+                            position = "before";
+                        }
+
+                        // Check if parent needs updating
+                        const expectedParentId =
+                            containerId === widgetId ? undefined : containerId;
+
+                        if (component.parentId !== expectedParentId) {
+                            // Move component to the new parent
+                            console.log(
+                                `Moving component ${componentId} to parent ${
+                                    expectedParentId || "root"
+                                }`
+                            );
+                            builderService.moveComponent(
+                                widgetId,
+                                componentId,
+                                expectedParentId
+                            );
+
+                            // Explicitly notify about component movement
+                            eventBus.publish("component:moved", {
+                                widgetId,
+                                componentId,
+                                parentId: expectedParentId,
+                            });
+                        }
+
+                        // Reorder within the container if we have a target
+                        if (targetId && treeItems.length > 1) {
+                            console.log(
+                                `Reordering component ${componentId} to be ${position} ${targetId}`
+                            );
+                            builderService.reorderComponents(
+                                widgetId,
+                                containerId,
+                                componentId,
+                                targetId,
+                                position
+                            );
+
+                            // Explicitly notify about component reordering
+                            eventBus.publish("component:reordered", {
+                                widgetId,
+                                containerId,
+                                componentId,
+                                targetId,
+                                position,
+                            });
+                        }
+
+                        // Process children recursively if they exist
+                        if (item.children && item.children.length > 0) {
+                            await processTreeItems(item.children, componentId);
+                        }
                     }
+                };
+
+                // Start the recursive processing
+                await processTreeItems(items);
+
+                // Notify about the hierarchy change
+                eventBus.publish("hierarchy:changed", { widgetId });
+
+                // Explicitly notify the widget to refresh
+                eventBus.publish("widget:updated", {
+                    widgetId,
+                    action: "hierarchy-updated",
                 });
-            };
 
-            // Start processing from root
-            processUpdatedHierarchy(items);
+                // Add DOM event for legacy components that might not use eventBus
+                document.dispatchEvent(
+                    new CustomEvent("widget-updated", {
+                        detail: { widgetId, action: "hierarchy-updated" },
+                    })
+                );
 
-            // Notify about hierarchy changes
-            eventBus.publish("hierarchy:changed", { widgetId });
+                // Force re-render of components
+                document.dispatchEvent(
+                    new CustomEvent("component-hierarchy-changed", {
+                        detail: { widgetId },
+                    })
+                );
+
+                console.log("Tree move processing complete");
+
+                // Force a refresh of the panel
+                setForceRender((prev) => prev + 1);
+
+                // Small delay before allowing new drags to ensure all updates are processed
+                setTimeout(() => {
+                    setIsProcessingDrag(false);
+                }, 100);
+            } catch (error) {
+                console.error("Error processing tree move:", error);
+                setIsProcessingDrag(false);
+            }
         },
-        [widgetStore]
+        [widgetStore, isProcessingDrag]
     );
 
     // Handle selection
@@ -287,6 +440,7 @@ const LayoutPanel = () => {
                 // Set the selection in the selection store
                 selectionState.selectComponent(componentId, widgetId, {
                     syncWithLayoutPanel: false,
+                    openPropertyPanel: true,
                 });
             } else {
                 // Just a widget selected, no component
@@ -308,6 +462,8 @@ const LayoutPanel = () => {
 
     // Manual refresh button handler
     const handleManualRefresh = useCallback(() => {
+        // Clear the current hierarchy data to force refetch
+        hierarchyDataRef.current = [];
         setForceRender((prev) => prev + 1);
     }, []);
 

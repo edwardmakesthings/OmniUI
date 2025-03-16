@@ -233,9 +233,9 @@ function renderHierarchy(
             instance.type === "Panel" || instance.type === "ScrollBox";
 
         // Get child components
-        const childComponents = widget.components
-            .filter((c) => c.parentId === widgetComponent.id)
-            .sort((a, b) => a.zIndex - b.zIndex);
+        const childComponents = widget.components.filter(
+            (c) => c.parentId === widgetComponent.id
+        );
 
         // Recursively render child components
         const renderedChildren = childComponents

@@ -698,34 +698,40 @@ export const useWidgetStore = create<WidgetStore>()(
                         if (foundCircular) return state;
                     }
 
-                    // Update components array with all necessary changes
-                    const updatedComponents = widget.components.map(c => {
-                        if (c.id === componentId) {
-                            // This is the component being moved
-                            return {
-                                ...c,
-                                parentId: newParentId || undefined // Set to undefined if no new parent
-                            };
-                        }
-                        else if (c.id === oldParentId && oldParent) {
-                            // This is the old parent - remove child from its childIds
-                            return {
-                                ...c,
-                                childIds: c.childIds?.filter(id => id !== componentId) || []
-                            };
-                        }
-                        else if (c.id === newParentId && newParent) {
-                            // This is the new parent - add child to its childIds
-                            return {
-                                ...c,
-                                childIds: [...(c.childIds || []), componentId]
-                            };
-                        }
-                        // No changes needed for other components
-                        return c;
-                    });
+                    // Create a new components array with all the updates
+                    let updatedComponents = [...widget.components];
 
-                    // Return updated state
+                    // 1. Update the moved component's parent
+                    const componentIndex = updatedComponents.findIndex(c => c.id === componentId);
+                    updatedComponents[componentIndex] = {
+                        ...updatedComponents[componentIndex],
+                        parentId: newParentId || undefined
+                    };
+
+                    // 2. Update the old parent's childIds if needed
+                    if (oldParentId) {
+                        const oldParentIndex = updatedComponents.findIndex(c => c.id === oldParentId);
+                        if (oldParentIndex >= 0) {
+                            updatedComponents[oldParentIndex] = {
+                                ...updatedComponents[oldParentIndex],
+                                childIds: updatedComponents[oldParentIndex].childIds.filter(id => id !== componentId)
+                            };
+                        }
+                    }
+
+                    // 3. Update the new parent's childIds if needed
+                    if (newParentId) {
+                        const newParentIndex = updatedComponents.findIndex(c => c.id === newParentId);
+                        if (newParentIndex >= 0) {
+                            // Add to the end of the children list (maintains array order)
+                            updatedComponents[newParentIndex] = {
+                                ...updatedComponents[newParentIndex],
+                                childIds: [...updatedComponents[newParentIndex].childIds, componentId]
+                            };
+                        }
+                    }
+
+                    // Return the updated state with all changes applied at once
                     return {
                         widgets: {
                             ...state.widgets,
@@ -736,28 +742,6 @@ export const useWidgetStore = create<WidgetStore>()(
                         }
                     };
                 });
-
-                // Update zIndex for proper layering
-                const widget = get().widgets[widgetId];
-                if (!widget) return;
-
-                if (newParentId) {
-                    // Set zIndex within parent's children group
-                    const siblings = widget.components.filter(c => c.parentId === newParentId);
-                    siblings.forEach((comp, index) => {
-                        get().updateComponent(widgetId, comp.id, {
-                            zIndex: index
-                        });
-                    });
-                } else {
-                    // Update root-level component zIndexes
-                    const rootComponents = widget.components.filter(c => !c.parentId);
-                    rootComponents.forEach((comp, index) => {
-                        get().updateComponent(widgetId, comp.id, {
-                            zIndex: index + 10 // Add base z-index for root components
-                        });
-                    });
-                }
 
                 eventBus.publish('hierarchy:changed', { widgetId });
             },
@@ -938,10 +922,6 @@ export const useWidgetStore = create<WidgetStore>()(
              * @param targetId Target component to position relative to
              * @param position Whether to place before or after the target
              */
-            /**
-             * Simplified reordering logic that creates a completely new component array
-             * with the correct order, rather than trying to adjust z-indexes of existing components.
-             */
             reorderComponents: (
                 widgetId: EntityId,
                 containerId: EntityId,
@@ -950,111 +930,103 @@ export const useWidgetStore = create<WidgetStore>()(
                 position: 'before' | 'after'
             ) => {
                 set(state => {
-                    console.log(`REORDER START: ${componentId} ${position} ${targetId} in ${containerId}`);
+                    // Debug logging
+                    console.log(`ARRAY REORDER: ${componentId} ${position} ${targetId} in ${containerId}`);
 
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
 
-                    // Find the component to reorder
-                    const component = widget.components.find(c => c.id === componentId);
-                    if (!component) return state;
+                    // Get a reference to the current components array
+                    const originalComponents = widget.components;
 
-                    // Find the target component
-                    const target = widget.components.find(c => c.id === targetId);
-                    if (!target) return state;
-
-                    // Determine if we're working with root-level or container children
+                    // Determine if we're working with root or container level
                     const isRootLevel = containerId === widgetId;
 
-                    // Get all siblings at this level (including the component if it's already at this level)
-                    const siblings = widget.components.filter(c =>
-                        isRootLevel ? !c.parentId : c.parentId === containerId
-                    );
+                    // Find our component in the array
+                    const componentToMove = originalComponents.find(c => c.id === componentId);
+                    if (!componentToMove) {
+                        console.error(`Component ${componentId} not found`);
+                        return state;
+                    }
 
-                    console.log(`Current siblings: ${siblings.map(s => s.id).join(', ')}`);
+                    // Find the target component in the array
+                    const targetComponent = originalComponents.find(c => c.id === targetId);
+                    if (!targetComponent) {
+                        console.error(`Target ${targetId} not found`);
+                        return state;
+                    }
 
-                    // First create a new array without the component we're moving
-                    const siblingsWithoutComponent = siblings.filter(c => c.id !== componentId);
+                    // Create a fresh array without the component we're moving
+                    const arrayWithoutComponent = originalComponents.filter(c => c.id !== componentId);
 
-                    // Find target index
-                    const targetIndex = siblingsWithoutComponent.findIndex(c => c.id === targetId);
-                    if (targetIndex === -1) return state;
+                    // Find position of the target in the new array
+                    const targetPosition = arrayWithoutComponent.findIndex(c => c.id === targetId);
+                    if (targetPosition === -1) {
+                        console.error(`Target ${targetId} not found after filtering`);
+                        return state;
+                    }
 
-                    // Calculate insert position
-                    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+                    // Calculate insertion position
+                    const insertPosition = position === 'before' ? targetPosition : targetPosition + 1;
 
-                    // Create a new array with component inserted at the right position
-                    const newSiblingOrder = [
-                        ...siblingsWithoutComponent.slice(0, insertIndex),
-                        component,
-                        ...siblingsWithoutComponent.slice(insertIndex)
+                    // Update parentId if needed (moving to a new parent)
+                    const newParentId = isRootLevel ? undefined : containerId;
+                    const isParentChanging = componentToMove.parentId !== newParentId;
+
+                    // Clone component with updated parentId if needed
+                    const updatedComponent = isParentChanging
+                        ? { ...componentToMove, parentId: newParentId }
+                        : componentToMove;
+
+                    // Build the final array by inserting at the right position
+                    const result = [
+                        ...arrayWithoutComponent.slice(0, insertPosition),
+                        updatedComponent,
+                        ...arrayWithoutComponent.slice(insertPosition)
                     ];
 
-                    console.log(`New sibling order: ${newSiblingOrder.map(s => s.id).join(', ')}`);
-
-                    // First, update the component's parent if needed
-                    let updatedComponents = widget.components.map(c => {
-                        if (c.id === componentId) {
-                            return {
-                                ...c,
-                                parentId: isRootLevel ? undefined : containerId
-                            };
+                    // Update parent relationships if parent is changing
+                    if (isParentChanging) {
+                        // Handle old parent (remove from childIds)
+                        if (componentToMove.parentId) {
+                            const oldParentIndex = result.findIndex(c => c.id === componentToMove.parentId);
+                            if (oldParentIndex !== -1) {
+                                result[oldParentIndex] = {
+                                    ...result[oldParentIndex],
+                                    childIds: result[oldParentIndex].childIds.filter(id => id !== componentId)
+                                };
+                            }
                         }
-                        return c;
-                    });
 
-                    // Next, update old parent's childIds if needed
-                    if (component.parentId && component.parentId !== containerId) {
-                        const oldParentIndex = updatedComponents.findIndex(c => c.id === component.parentId);
-                        if (oldParentIndex !== -1) {
-                            updatedComponents[oldParentIndex] = {
-                                ...updatedComponents[oldParentIndex],
-                                childIds: updatedComponents[oldParentIndex].childIds.filter(id => id !== componentId)
-                            };
-                        }
-                    }
-
-                    // Then, update new parent's childIds if this is a container
-                    if (!isRootLevel) {
-                        const newParentIndex = updatedComponents.findIndex(c => c.id === containerId);
-                        if (newParentIndex !== -1) {
-                            // Use the exact order from newSiblingOrder for childIds
-                            updatedComponents[newParentIndex] = {
-                                ...updatedComponents[newParentIndex],
-                                childIds: newSiblingOrder.map(s => s.id)
-                            };
+                        // Handle new parent (add to childIds)
+                        if (newParentId) {
+                            const newParentIndex = result.findIndex(c => c.id === newParentId);
+                            if (newParentIndex !== -1) {
+                                result[newParentIndex] = {
+                                    ...result[newParentIndex],
+                                    childIds: [...(result[newParentIndex].childIds || []), componentId]
+                                };
+                            }
                         }
                     }
 
-                    // Finally, assign sequential z-indexes to maintain visual order
-                    updatedComponents = updatedComponents.map(c => {
-                        // Only update components at this level
-                        const orderIndex = newSiblingOrder.findIndex(s => s.id === c.id);
-                        if (orderIndex !== -1) {
-                            return {
-                                ...c,
-                                zIndex: orderIndex * 10 // Multiply by 10 to leave gaps
-                            };
-                        }
-                        return c;
-                    });
+                    // Log the results for debugging
+                    console.log("BEFORE:", originalComponents.map(c => c.id).join(", "));
+                    console.log("AFTER:", result.map(c => c.id).join(", "));
 
-                    // Log z-indexes for debugging
-                    console.log(`Z-indexes: ${newSiblingOrder.map((s, i) => `${s.id}: ${i * 10}`).join(', ')}`);
-
-                    // Return completely new state
+                    // Replace the entire components array with our new one
                     return {
                         widgets: {
                             ...state.widgets,
                             [widgetId]: {
                                 ...widget,
-                                components: updatedComponents
+                                components: result
                             }
                         }
                     };
                 });
 
-                // Trigger re-render via eventBus
+                // Send notifications about the change
                 eventBus.publish('component:reordered', { widgetId, containerId, componentId, targetId, position });
                 eventBus.publish('hierarchy:changed', { widgetId });
             },

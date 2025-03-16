@@ -423,6 +423,9 @@ export class DropZoneManager {
             `[data-widget-id="${widgetId}"] [data-component-id]`
         );
 
+        // Create a map to track which elements contain the point
+        const hitElements: Map<Element, { id: EntityId, depth: number }> = new Map();
+
         // Check each element to see if the point is inside
         componentElements.forEach(element => {
             const rect = element.getBoundingClientRect();
@@ -432,6 +435,7 @@ export class DropZoneManager {
                 // Calculate accurate nesting depth
                 let depth = 0;
                 let current = element;
+                let parentComponents = [];
 
                 // Count parent components to get true nesting depth
                 while (current && current.parentElement) {
@@ -440,6 +444,7 @@ export class DropZoneManager {
                     // If this parent has a component ID, increment depth
                     if (current.hasAttribute('data-component-id')) {
                         depth++;
+                        parentComponents.push(current.getAttribute('data-component-id'));
                     }
 
                     // Stop if we reach the widget
@@ -448,16 +453,37 @@ export class DropZoneManager {
                     }
                 }
 
-                // Add to results
-                components.push({
+                // Add to our map - this ensures we only have one entry per element
+                hitElements.set(element, {
                     id: element.getAttribute("data-component-id") as EntityId,
-                    element,
                     depth
                 });
             }
         });
 
-        return components;
+        // Convert map entries to array
+        hitElements.forEach((data, element) => {
+            components.push({
+                id: data.id,
+                element,
+                depth: data.depth
+            });
+        });
+
+        // Sort components by DOM nesting level (deepest first)
+        // This ensures we find the most deeply nested component that contains the point
+        return components.sort((a, b) => {
+            // Primary sort by depth (deeper components first)
+            if (b.depth !== a.depth) {
+                return b.depth - a.depth;
+            }
+
+            // Secondary sort by DOM position for components at the same depth
+            // Components that appear later in the DOM (possibly rendered on top) come first
+            const aIndex = Array.from(componentElements).indexOf(a.element);
+            const bIndex = Array.from(componentElements).indexOf(b.element);
+            return bIndex - aIndex;
+        });
     };
 
     /**

@@ -36,7 +36,7 @@ export class WidgetOverlayManager {
         x: number,
         y: number
     ): DropTargetInfo {
-        console.log(`[FindTarget] Looking for drop target at (${x}, ${y}) in widget ${widgetId}`);
+        // console.log(`[FindTarget] Looking for drop target at (${x}, ${y}) in widget ${widgetId}`);
 
         // Find all components at this position
         const components = dropZoneManager.findAllComponentsAtPosition(widgetId, x, y);
@@ -44,10 +44,10 @@ export class WidgetOverlayManager {
         // Sort by depth - deepest first (most nested)
         components.sort((a, b) => b.depth - a.depth);
 
-        console.log(`[FindTarget] Found ${components.length} components at position`);
-        if (components.length > 0) {
-            console.log(`[FindTarget] Deepest component: ${components[0].id} (depth: ${components[0].depth})`);
-        }
+        // console.log(`[FindTarget] Found ${components.length} components at position`);
+        // if (components.length > 0) {
+        //     console.log(`[FindTarget] Deepest component: ${components[0].id} (depth: ${components[0].depth})`);
+        // }
 
         // If no components were found, return the widget itself as target
         if (components.length === 0) {

@@ -274,25 +274,71 @@ export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
         [data.id, refreshWidget]
     );
 
+    // Handle component moved events
     useEventSubscription(
-        "hierarchy:changed",
+        "component:moved",
         (event) => {
             if (event.data.widgetId === data.id) {
+                console.log(
+                    "Widget received component move event:",
+                    event.data
+                );
                 refreshWidget();
             }
         },
         [data.id, refreshWidget]
     );
 
-    // Get root components to render
+    // Ensure we're properly handling hierarchy changed events
+    useEventSubscription(
+        "hierarchy:changed",
+        (event) => {
+            if (event.data.widgetId === data.id) {
+                console.log(
+                    "Widget received hierarchy change event:",
+                    event.data
+                );
+                refreshWidget();
+            }
+        },
+        [data.id, refreshWidget]
+    );
+
+    // Handle legacy DOM events in the same component
+    useEffect(() => {
+        const handleLegacyHierarchyChange = (e: Event) => {
+            const customEvent = e as CustomEvent;
+            if (customEvent.detail?.widgetId === data.id) {
+                console.log("Widget received legacy hierarchy change event");
+                refreshWidget();
+            }
+        };
+
+        document.addEventListener(
+            "component-hierarchy-changed",
+            handleLegacyHierarchyChange
+        );
+
+        return () => {
+            document.removeEventListener(
+                "component-hierarchy-changed",
+                handleLegacyHierarchyChange
+            );
+        };
+    }, [data.id, refreshWidget]);
+
+    // Get root components to render - using array order for siblings rather than z-index
     const rootComponents = useMemo(
-        () =>
-            data.components
-                .filter((comp: WidgetComponent) => !comp.parentId)
-                .sort(
-                    (a: WidgetComponent, b: WidgetComponent) =>
-                        a.zIndex - b.zIndex
-                ),
+        () => {
+            // Get all root-level components (no parent)
+            const roots = data.components.filter(
+                (comp: WidgetComponent) => !comp.parentId
+            );
+
+            // Return in array order - no sorting by z-index
+            // This preserves the order components were added to the widget
+            return roots;
+        },
         [data.components, forceRender] // Include forceRender to trigger recalculation
     );
 
