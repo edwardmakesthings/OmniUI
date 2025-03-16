@@ -1,21 +1,24 @@
+/**
+ * @file src/store/widgetStore.ts
+ * Widget store for managing the container structure of components
+ * and their layout relationships.
+ */
 import { nanoid } from "nanoid";
 import { Position, PositionUtils, Size, SizeUtils } from "@/core/types/Geometry";
 import { EntityId, createEntityId } from "@/core/types/EntityTypes";
 import { Node } from "@xyflow/react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { ComponentConfig } from "@/core/base/ComponentConfig";
-import { useComponentStore } from "@/store/componentStore";
 import { useEffect } from "react";
-import { ButtonIcon, InputIcon, LabelIcon, PanelIcon, WidgetIcon } from "@/components/ui";
+import { PanelIcon } from "@/components/ui";
 import { UnitType } from "@/core/types/Measurement";
-import { notifyWidgetChange } from "@/core/eventBus/widgetEvents";
 import { componentIconMap } from "@/registry/componentRenderers";
+import eventBus from "@/core/eventBus/eventBus";
 
 // Widget display types
 export type WidgetDisplayType = 'canvas' | 'modal' | 'drawer' | 'embedded';
 
-// Widget represets a container for components
+// Widget represents a container for components
 export interface Widget {
     id: EntityId;
     name: string;
@@ -84,6 +87,7 @@ export interface WidgetStore {
     addComponentToWidget: (
         widgetId: EntityId,
         definitionId: EntityId,
+        instanceId: EntityId,
         position: Position
     ) => WidgetComponent | null;
     updateComponent: (
@@ -106,6 +110,7 @@ export interface WidgetStore {
         widgetId: EntityId,
         parentComponentId: EntityId,
         definitionId: EntityId,
+        instanceId: EntityId,
         position?: Position
     ) => WidgetComponent | null;
 
@@ -117,12 +122,25 @@ export interface WidgetStore {
     ) => void;
 
     // Get component hierarchy
-    getComponentHierarchy: (widgetId: EntityId) => {
-        id: EntityId;
+    getComponentHierarchy: (
+        widgetId: EntityId,
+        options?: { debug?: boolean, includeWidget?: boolean }
+    ) => Promise<{
+        id: string;
         type: string;
         label: string;
+        icon: any;
+        canDrop: boolean;
+        canDrag: boolean;
+        data?: {
+            componentId: EntityId;
+            widgetId: EntityId;
+            instanceId: EntityId;
+            definitionId: EntityId;
+        };
+        parentId?: string;
         children: any[];
-    }[];
+    }[]>;
 
     reorderComponents: (
         widgetId: EntityId,
@@ -131,6 +149,13 @@ export interface WidgetStore {
         targetId: EntityId,
         position: 'before' | 'after'
     ) => void;
+
+    // Component lookup
+    findComponent: (widgetId: EntityId, componentId: EntityId) => WidgetComponent | null;
+    findComponentByInstanceId: (instanceId: EntityId) => {
+        component: WidgetComponent | null,
+        widgetId: EntityId | null
+    };
 
     // Utility operations
     convertToNodes: () => FlowWidgetNode[];
@@ -146,6 +171,11 @@ export interface WidgetStore {
     setActiveWidget: (id: EntityId | null) => void;
 }
 
+/**
+ * Widget store for managing widget containers and their component hierarchy.
+ * This store maintains the structure of widgets and components but delegates
+ * actual component instance management to the component store.
+ */
 export const useWidgetStore = create<WidgetStore>()(
     persist(
         (set, get) => ({
@@ -185,7 +215,6 @@ export const useWidgetStore = create<WidgetStore>()(
                     },
                     // Set as active widget if it's the first one or a canvas type
                     activeWidgetId: state.activeWidgetId === null && displayType === 'canvas' ? id : state.activeWidgetId
-
                 }));
 
                 return newWidget;
@@ -312,127 +341,114 @@ export const useWidgetStore = create<WidgetStore>()(
                 });
             },
 
-            addComponentToWidget: (widgetId, definitionId, position) => {
+            /**
+             * Add a component to a widget using the given definition and instance IDs.
+             * @param widgetId ID of the widget to add the component to
+             * @param definitionId ID of the component definition
+             * @param instanceId ID of the component instance
+             * @param position Position for the component in the widget
+             * @returns The created widget component or null if failed
+             */
+            addComponentToWidget: (
+                widgetId: EntityId,
+                definitionId: EntityId,
+                instanceId: EntityId,
+                position: Position
+            ) => {
+                // Parameter validation to prevent instanceId/position confusion
+                if (!instanceId || typeof instanceId !== 'string') {
+                    console.error("Invalid instanceId parameter. Expected EntityId, got:", instanceId);
+                    return null;
+                }
+
+                // Validate that position is actually a Position object
+                if (!position || !position.x || !position.y) {
+                    console.error("Invalid position parameter. Expected Position object, got:", position);
+                    return null;
+                }
+
                 const widget = get().widgets[widgetId];
                 if (!widget) return null;
 
-                // Create component instance
-                const componentStore = useComponentStore.getState();
-                try {
-                    // Determine default size based on component type
-                    const definition = componentStore.getDefinition(definitionId);
-                    let defaultSize = {
+                // Create widget component reference
+                const componentId = createEntityId(`component-${nanoid(6)}`);
+                const newComponent: WidgetComponent = {
+                    id: componentId,
+                    definitionId,
+                    instanceId,
+                    position,
+                    size: {
                         width: { value: 100, unit: 'px' },
                         height: { value: 40, unit: 'px' }
+                    },
+                    zIndex: widget.components.length,
+                    childIds: []
+                };
+
+                // Add to widget
+                set(state => {
+                    const updatedWidget = {
+                        ...widget,
+                        components: [...widget.components, newComponent]
                     };
 
-                    // Adjust size based on component type
-                    if (definition.type === 'Panel' || definition.type === 'ScrollBox') {
-                        defaultSize = {
-                            width: { value: 200, unit: 'px' },
-                            height: { value: 150, unit: 'px' }
-                        };
-                    } else if (definition.type === 'Input') {
-                        defaultSize = {
-                            width: { value: 160, unit: 'px' },
-                            height: { value: 32, unit: 'px' }
-                        };
-                    } else if (definition.type === 'Label') {
-                        defaultSize = {
-                            width: { value: 120, unit: 'px' },
-                            height: { value: 24, unit: 'px' }
-                        };
-                    }
-
-                    const instance = componentStore.createFromDefinition(
-                        definitionId,
-                        {
-                            // Default config for this component
-                            layout: {
-                                position: {
-                                    x: { value: 0, unit: 'px' },
-                                    y: { value: 0, unit: 'px' }
-                                },
-                                size: defaultSize
-                            }
-                        } as ComponentConfig
-                    );
-
-                    // Create widget component reference
-                    const componentId = createEntityId(`component-${nanoid(6)}`);
-                    const newComponent: WidgetComponent = {
-                        id: componentId,
-                        definitionId,
-                        instanceId: instance.id,
-                        position,
-                        size: defaultSize as Size,
-                        zIndex: widget.components.length,
-                        childIds: []
+                    return {
+                        widgets: {
+                            ...state.widgets,
+                            [widgetId]: updatedWidget
+                        }
                     };
+                });
 
-                    // Add to widget
-                    set(state => {
-                        const updatedWidget = {
-                            ...widget,
-                            components: [...widget.components, newComponent]
+                // If the widget is NOT in edit mode, recalculate and update the size after component addition
+                if (!widget.isEditMode) {
+                    // Recalculate widget size after component addition
+                    setTimeout(() => {
+                        const updatedWidget = get().widgets[widgetId];
+                        if (!updatedWidget) return;
+
+                        // Find boundaries of all components
+                        let maxRight = 0;
+                        let maxBottom = 0;
+                        const padding = { x: 20, y: 20 };
+
+                        updatedWidget.components.forEach(comp => {
+                            const right = comp.position.x.value + comp.size.width.value;
+                            const bottom = comp.position.y.value + comp.size.height.value;
+
+                            maxRight = Math.max(maxRight, right);
+                            maxBottom = Math.max(maxBottom, bottom);
+                        });
+
+                        // Calculate total size with padding
+                        const totalWidth = maxRight + padding.x;
+                        const totalHeight = maxBottom + padding.y;
+
+                        // Enforce minimum size
+                        const minWidth = 200;
+                        const minHeight = 100;
+
+                        const newSize = {
+                            width: { value: Math.max(minWidth, totalWidth), unit: "px" },
+                            height: { value: Math.max(minHeight, totalHeight), unit: "px" }
                         };
 
-                        return {
-                            widgets: {
-                                ...state.widgets,
-                                [widgetId]: updatedWidget
-                            }
-                        };
-                    });
-
-                    // If the widget is NOT in edit mode, recalculate and update the size after component addition
-                    if (!widget.isEditMode) {
-                        // Recalculate widget size after component addition
-                        setTimeout(() => {
-                            const updatedWidget = get().widgets[widgetId];
-                            if (!updatedWidget) return;
-
-                            // Find boundaries of all components
-                            let maxRight = 0;
-                            let maxBottom = 0;
-                            const padding = { x: 20, y: 20 };
-
-                            updatedWidget.components.forEach(comp => {
-                                const right = comp.position.x.value + comp.size.width.value;
-                                const bottom = comp.position.y.value + comp.size.height.value;
-
-                                maxRight = Math.max(maxRight, right);
-                                maxBottom = Math.max(maxBottom, bottom);
-                            });
-
-                            // Calculate total size with padding
-                            const totalWidth = maxRight + padding.x;
-                            const totalHeight = maxBottom + padding.y;
-
-                            // Enforce minimum size
-                            const minWidth = 200;
-                            const minHeight = 100;
-
-                            const newSize = {
-                                width: { value: Math.max(minWidth, totalWidth), unit: "px" },
-                                height: { value: Math.max(minHeight, totalHeight), unit: "px" }
-                            };
-
-                            // Update widget size
-                            get().updateWidget(widgetId, { size: newSize as Size });
-                        }, 50); // Slight delay to ensure the component is fully added
-                    }
-
-                    notifyWidgetChange(widgetId, 'componentAdded');
-
-                    return newComponent;
-
-                } catch (error) {
-                    console.error("Failed to create component instance:", error);
-                    return null;
+                        // Update widget size
+                        get().updateWidget(widgetId, { size: newSize as Size });
+                    }, 50); // Slight delay to ensure the component is fully added
                 }
+
+                eventBus.publish("component:added", { widgetId, componentId });
+
+                return newComponent;
             },
 
+            /**
+             * Update a component in a widget
+             * @param widgetId ID of the widget containing the component
+             * @param componentId ID of the component to update
+             * @param updates Changes to apply to the component
+             */
             updateComponent: (widgetId, componentId, updates) => {
                 set(state => {
                     const widget = state.widgets[widgetId];
@@ -440,7 +456,7 @@ export const useWidgetStore = create<WidgetStore>()(
 
                     const updatedComponents = widget.components.map(c => c.id == componentId ? { ...c, ...updates } : c);
 
-                    notifyWidgetChange(widgetId, 'componentUpdated');
+                    eventBus.publish("component:updated", { widgetId, componentId });
 
                     return {
                         widgets: {
@@ -454,13 +470,19 @@ export const useWidgetStore = create<WidgetStore>()(
                 });
             },
 
+            /**
+             * Remove a component from a widget
+             * @param widgetId ID of the widget containing the component
+             * @param componentId ID of the component to remove
+             */
             removeComponent: (widgetId, componentId) => {
                 set(state => {
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
 
                     const updatedComponents = widget.components.filter(c => c.id !== componentId);
-                    notifyWidgetChange(widgetId, 'componentRemoved');
+
+                    eventBus.publish("component:deleted", { widgetId, componentId });
 
                     return {
                         widgets: {
@@ -474,6 +496,46 @@ export const useWidgetStore = create<WidgetStore>()(
                 });
             },
 
+            /**
+             * Find a component in a widget by its ID
+             * @param widgetId ID of the widget to search in
+             * @param componentId ID of the component to find
+             * @returns The component or null if not found
+             */
+            findComponent: (widgetId, componentId) => {
+                const widget = get().widgets[widgetId];
+                if (!widget) return null;
+
+                return widget.components.find(c => c.id === componentId) || null;
+            },
+
+            /**
+             * Find a component by its instance ID across all widgets
+             * @param instanceId The instance ID to search for
+             * @returns Object with the component and its widget ID, or null values if not found
+             */
+            findComponentByInstanceId: (instanceId) => {
+                const widgets = get().widgets;
+
+                for (const widgetId in widgets) {
+                    const widget = widgets[widgetId];
+                    const component = widget.components.find(c => c.instanceId === instanceId);
+
+                    if (component) {
+                        return { component, widgetId: widgetId as EntityId };
+                    }
+                }
+
+                return { component: null, widgetId: null };
+            },
+
+            /**
+             * Bind a component to a widget for navigation/action
+             * @param sourceWidgetId The widget containing the component
+             * @param componentId The component to bind
+             * @param targetWidgetId The target widget to show/hide
+             * @param action The action to perform (default: 'show')
+             */
             bindComponentToWidget: (sourceWidgetId, componentId, targetWidgetId, action = 'show') => {
                 set(state => {
                     const sourceWidget = state.widgets[sourceWidgetId];
@@ -504,10 +566,20 @@ export const useWidgetStore = create<WidgetStore>()(
                 });
             },
 
+            /**
+             * Add a child component to a parent component within a widget
+             * @param widgetId The widget ID
+             * @param parentComponentId The parent component ID
+             * @param definitionId The component definition ID
+             * @param instanceId The component instance ID
+             * @param position The optional position override (defaults to 10,10)
+             * @returns The created widget component or null if failed
+             */
             addChildComponent: (
                 widgetId: EntityId,
                 parentComponentId: EntityId,
                 definitionId: EntityId,
+                instanceId: EntityId,
                 position = {
                     x: { value: 10, unit: "px" as UnitType },
                     y: { value: 10, unit: "px" as UnitType }
@@ -521,7 +593,7 @@ export const useWidgetStore = create<WidgetStore>()(
                     return null;
                 }
 
-                // First, check if parent exists and is a container
+                // First, check if parent exists
                 const parentComponent = widget.components.find(comp => comp.id === parentComponentId);
 
                 if (!parentComponent) {
@@ -530,27 +602,12 @@ export const useWidgetStore = create<WidgetStore>()(
                 }
 
                 try {
-                    // Create component instance from definition
-                    const componentStore = useComponentStore.getState();
-                    const instance = componentStore.createFromDefinition(
-                        definitionId,
-                        {
-                            layout: {
-                                position,
-                                size: {
-                                    width: { value: 100, unit: "px" },
-                                    height: { value: 40, unit: "px" }
-                                }
-                            }
-                        } as ComponentConfig
-                    );
-
                     // Create component reference for widget
                     const componentId = createEntityId(`component-${nanoid(6)}`);
                     const newComponent: WidgetComponent = {
                         id: componentId,
                         definitionId,
-                        instanceId: instance.id,
+                        instanceId,
                         position,
                         size: {
                             width: { value: 100, unit: "px" },
@@ -588,7 +645,7 @@ export const useWidgetStore = create<WidgetStore>()(
                         };
                     });
 
-                    notifyWidgetChange(widgetId, 'hierarchyChanged');
+                    eventBus.publish('hierarchy:changed', { widgetId });
 
                     return newComponent;
                 } catch (error) {
@@ -597,6 +654,13 @@ export const useWidgetStore = create<WidgetStore>()(
                 }
             },
 
+            /**
+             * Move a component to a new parent within a widget
+             * @param widgetId The widget containing the component
+             * @param componentId The component to move
+             * @param newParentId The new parent ID or undefined for root level
+             * @param position Optional position override
+             */
             moveComponent: (
                 widgetId: EntityId,
                 componentId: EntityId,
@@ -695,89 +759,130 @@ export const useWidgetStore = create<WidgetStore>()(
                     });
                 }
 
-                // Trigger a layout hierarchy update event
-                setTimeout(() => {
-                    const layoutHierarchyPanel = document.querySelector('[data-panel-id="layout-hierarchy"]');
-                    if (layoutHierarchyPanel) {
-                        const event = new CustomEvent('widget-updated', {
-                            detail: { widgetId }
-                        });
-                        layoutHierarchyPanel.dispatchEvent(event);
-                    }
-                }, 0);
-
-                notifyWidgetChange(widgetId, 'hierarchyChanged');
-
+                eventBus.publish('hierarchy:changed', { widgetId });
             },
 
-            // Implementation for the hierarchy getter
-            getComponentHierarchy: (widgetId: EntityId, includeWidget = true) => {
+            /**
+             * Get the component hierarchy for a widget
+             * @param widgetId The widget to get the hierarchy for
+             * @param options Optional configuration for hierarchy generation
+             * @returns Component hierarchy tree
+             */
+            getComponentHierarchy: (
+                widgetId: EntityId,
+                options: { debug?: boolean, includeWidget?: boolean } = {}
+            ) => {
+                const { debug = false, includeWidget = true } = options;
                 const widget = get().widgets[widgetId];
-                if (!widget) return [];
+                if (!widget) return Promise.resolve([]);
 
                 // Debug logging to help diagnose hierarchy issues
-                console.log(`Building hierarchy for widget ${widgetId} with ${widget.components.length} components`);
+                if (debug) {
+                    console.log(`Building hierarchy for widget ${widgetId} with ${widget.components.length} components`);
 
-                // Log parent-child relationships
-                const parentChildMap = {};
-                widget.components.forEach(c => {
-                    const key = c.parentId ? c.parentId : 'root';
-                    if (!parentChildMap[key]) {
-                        parentChildMap[key] = [];
-                    }
-                    parentChildMap[key].push({
-                        id: c.id,
-                        type: c.instanceId ? useComponentStore.getState().instances[c.instanceId]?.type : 'unknown'
+                    // Log parent-child relationships
+                    const parentChildMap: Record<string, Array<{ id: EntityId, type: string }>> = {};
+                    widget.components.forEach(c => {
+                        const key = c.parentId ? c.parentId : 'root';
+                        if (!parentChildMap[key]) {
+                            parentChildMap[key] = [];
+                        }
+
+                        parentChildMap[key].push({
+                            id: c.id,
+                            type: c.definitionId.toString().split('-')[0] // Simplified type for debugging
+                        });
                     });
-                });
 
-                console.log('Parent-child relationships:', parentChildMap);
+                    console.log('Parent-child relationships:', parentChildMap);
+                }
 
-
-
-                // Get component store to access instances
-                const componentStore = useComponentStore.getState();
+                // Import component store dynamically to avoid circular dependencies
+                const getComponent = async (instanceId: EntityId) => {
+                    try {
+                        // Try to dynamically load the component store
+                        const module = await import('@/store/componentStore');
+                        const componentStore = module.useComponentStore.getState();
+                        return componentStore.getInstance(instanceId);
+                    } catch (error) {
+                        if (debug) {
+                            console.error(`Failed to load instance ${instanceId}:`, error);
+                        }
+                        return null;
+                    }
+                };
 
                 // Recursively build tree
-                const buildTree = (component) => {
+                const buildTree = async (component: WidgetComponent): Promise<{
+                    id: string;
+                    type: string;
+                    label: string;
+                    icon: any;
+                    canDrop: boolean;
+                    canDrag: boolean;
+                    data?: {
+                        componentId: EntityId;
+                        widgetId: EntityId;
+                        instanceId: EntityId;
+                        definitionId: EntityId;
+                    };
+                    parentId?: string;
+                    children: any[];
+                }> => {
                     try {
-                        // Get the instance, with fallback if not found
-                        let instance;
-                        try {
-                            instance = componentStore.instances[component.instanceId];
-                        } catch (err) {
-                            console.warn(`Instance not found for component ${component.id}`);
-                        }
-
                         // Find child components
                         const childComponents = widget.components.filter(c => c.parentId === component.id);
-                        console.log(`Component ${component.id} has ${childComponents.length} children`);
+                        if (debug) {
+                            console.log(`Component ${component.id} has ${childComponents.length} children`);
+                        }
+
+                        // Get component instance
+                        let instance;
+                        try {
+                            instance = await getComponent(component.instanceId);
+                        } catch (err) {
+                            if (debug) {
+                                console.warn(`Instance not found for component ${component.id}`);
+                            }
+                        }
+
+                        // Determine component type and label
+                        const instanceType = instance?.type || 'unknown';
+                        const instanceLabel = instance?.label || component.id.toString().split('-')[0];
 
                         // Determine icon based on component type
-                        let icon = PanelIcon;
-                        if (instance?.type && componentIconMap[instance.type]) {
-                            icon = componentIconMap[instance.type];
+                        let icon = componentIconMap["Panel"];
+                        if (componentIconMap[instanceType]) {
+                            icon = componentIconMap[instanceType];
                         }
+
+                        // Determine if component can accept children
+                        const canAcceptChildren =
+                            instanceType === 'Panel' ||
+                            instanceType === 'ScrollBox' ||
+                            instanceType === 'Drawer' ||
+                            instanceType === 'Tabs';
 
                         return {
                             // Use combined widget/component ID for tree identification
                             id: `${widgetId}/${component.id}`,
-                            type: instance?.type || 'unknown',
-                            label: instance?.label || component.id.toString().split('-')[0],
-                            icon,
+                            type: instanceType,
+                            label: instanceLabel,
+                            icon: icon,
                             // Control drag/drop based on component type
-                            canDrop: instance?.type === 'Panel' || instance?.type === 'ScrollBox',
+                            canDrop: canAcceptChildren,
                             canDrag: true,
                             // Include data about component for later use
                             data: {
                                 componentId: component.id,
                                 widgetId,
-                                instanceId: component.instanceId
+                                instanceId: component.instanceId,
+                                definitionId: component.definitionId
                             },
                             // Include parent reference for easier hierarchy management
                             parentId: component.parentId ? `${widgetId}/${component.parentId}` : undefined,
                             // Process children recursively
-                            children: childComponents.map(buildTree)
+                            children: await Promise.all(childComponents.map(buildTree))
                         };
                     } catch (error) {
                         console.error(`Error building tree for component ${component.id}:`, error);
@@ -795,20 +900,48 @@ export const useWidgetStore = create<WidgetStore>()(
 
                 // Find root-level components (no parent)
                 const rootComponents = widget.components.filter(c => !c.parentId);
-                console.log(`Found ${rootComponents.length} root components`);
+                if (debug) {
+                    console.log(`Found ${rootComponents.length} root components`);
+                }
 
-                // Map widget as the root with components as children
-                return [{
-                    id: widgetId,
-                    type: 'Widget',
-                    label: widget.label || 'Widget',
-                    icon: WidgetIcon,
-                    canDrop: true, // Widget can accept top-level components
-                    canDrag: false, // Widget itself can't be dragged in the hierarchy
-                    children: rootComponents.map(buildTree)
-                }];
+                // Create and execute async function to build hierarchy
+                const buildFullHierarchy = async () => {
+                    const rootNodes = await Promise.all(rootComponents.map(buildTree));
+
+                    // If includeWidget is false, return just the root components
+                    if (!includeWidget) {
+                        return rootNodes;
+                    }
+
+                    // Map widget as the root with components as children
+                    return [{
+                        id: widgetId,
+                        type: 'Widget',
+                        label: widget.label || 'Widget',
+                        icon: 'WidgetIcon',
+                        canDrop: true, // Widget can accept top-level components
+                        canDrag: false, // Widget itself can't be dragged in the hierarchy
+                        children: rootNodes
+                    }];
+                };
+
+                // Start the hierarchy building process
+                // Note: This returns a Promise - components using this will need to handle it
+                return buildFullHierarchy();
             },
 
+            /**
+             * Reorder components within a container
+             * @param widgetId Widget containing the components
+             * @param containerId Container/parent component ID
+             * @param componentId Component to reorder
+             * @param targetId Target component to position relative to
+             * @param position Whether to place before or after the target
+             */
+            /**
+             * Simplified reordering logic that creates a completely new component array
+             * with the correct order, rather than trying to adjust z-indexes of existing components.
+             */
             reorderComponents: (
                 widgetId: EntityId,
                 containerId: EntityId,
@@ -817,17 +950,12 @@ export const useWidgetStore = create<WidgetStore>()(
                 position: 'before' | 'after'
             ) => {
                 set(state => {
+                    console.log(`REORDER START: ${componentId} ${position} ${targetId} in ${containerId}`);
+
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
 
-                    // Find the container component
-                    const container = widget.components.find(c => c.id === containerId);
-                    if (!container) return state;
-
-                    // Get all current children of the container
-                    const children = widget.components.filter(c => c.parentId === containerId);
-
-                    // Find the component that's being reordered
+                    // Find the component to reorder
                     const component = widget.components.find(c => c.id === componentId);
                     if (!component) return state;
 
@@ -835,95 +963,86 @@ export const useWidgetStore = create<WidgetStore>()(
                     const target = widget.components.find(c => c.id === targetId);
                     if (!target) return state;
 
-                    // First, update component's parent if needed
-                    if (component.parentId !== containerId) {
-                        // Remove from old parent's children
-                        if (component.parentId) {
-                            const oldParent = widget.components.find(c => c.id === component.parentId);
-                            if (oldParent) {
-                                const updatedOldParent = {
-                                    ...oldParent,
-                                    childIds: oldParent.childIds.filter(id => id !== componentId)
-                                };
+                    // Determine if we're working with root-level or container children
+                    const isRootLevel = containerId === widgetId;
 
-                                // Update old parent
-                                const componentsWithUpdatedOldParent = widget.components.map(c =>
-                                    c.id === oldParent.id ? updatedOldParent : c
-                                );
+                    // Get all siblings at this level (including the component if it's already at this level)
+                    const siblings = widget.components.filter(c =>
+                        isRootLevel ? !c.parentId : c.parentId === containerId
+                    );
 
-                                // Update component's parent reference
-                                const updatedComponent = {
-                                    ...component,
-                                    parentId: containerId
-                                };
+                    console.log(`Current siblings: ${siblings.map(s => s.id).join(', ')}`);
 
-                                // Add to new parent's children
-                                const updatedNewParent = {
-                                    ...container,
-                                    childIds: [...container.childIds, componentId]
-                                };
+                    // First create a new array without the component we're moving
+                    const siblingsWithoutComponent = siblings.filter(c => c.id !== componentId);
 
-                                // Create updated components array with all changes
-                                const updatedComponents = componentsWithUpdatedOldParent.map(c => {
-                                    if (c.id === componentId) return updatedComponent;
-                                    if (c.id === containerId) return updatedNewParent;
-                                    return c;
-                                });
-
-                                return {
-                                    widgets: {
-                                        ...state.widgets,
-                                        [widgetId]: {
-                                            ...widget,
-                                            components: updatedComponents
-                                        }
-                                    }
-                                };
-                            }
-                        }
-                    }
-
-                    // Now handle reordering for components already in this container
-                    // Get the z-index of the target component
-                    const targetIndex = children.findIndex(c => c.id === targetId);
+                    // Find target index
+                    const targetIndex = siblingsWithoutComponent.findIndex(c => c.id === targetId);
                     if (targetIndex === -1) return state;
 
-                    // Determine new z-index based on position
-                    const newZIndex = position === 'before' ? target.zIndex : target.zIndex + 1;
+                    // Calculate insert position
+                    const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
 
-                    // Update z-indexes of all affected components
-                    const updatedComponents = widget.components.map(c => {
-                        // If this is the component being moved, update its z-index
+                    // Create a new array with component inserted at the right position
+                    const newSiblingOrder = [
+                        ...siblingsWithoutComponent.slice(0, insertIndex),
+                        component,
+                        ...siblingsWithoutComponent.slice(insertIndex)
+                    ];
+
+                    console.log(`New sibling order: ${newSiblingOrder.map(s => s.id).join(', ')}`);
+
+                    // First, update the component's parent if needed
+                    let updatedComponents = widget.components.map(c => {
                         if (c.id === componentId) {
                             return {
                                 ...c,
-                                zIndex: newZIndex,
-                                parentId: containerId // Ensure parent is set
+                                parentId: isRootLevel ? undefined : containerId
                             };
                         }
-
-                        // If this is a component that needs to shift due to insertion
-                        if (c.parentId === containerId) {
-                            if (position === 'before' && c.zIndex >= target.zIndex && c.id !== componentId) {
-                                // Shift up components after insertion point
-                                return {
-                                    ...c,
-                                    zIndex: c.zIndex + 1
-                                };
-                            }
-                            else if (position === 'after' && c.zIndex > target.zIndex && c.id !== componentId) {
-                                // Shift up components after insertion point
-                                return {
-                                    ...c,
-                                    zIndex: c.zIndex + 1
-                                };
-                            }
-                        }
-
-                        // No change needed for other components
                         return c;
                     });
 
+                    // Next, update old parent's childIds if needed
+                    if (component.parentId && component.parentId !== containerId) {
+                        const oldParentIndex = updatedComponents.findIndex(c => c.id === component.parentId);
+                        if (oldParentIndex !== -1) {
+                            updatedComponents[oldParentIndex] = {
+                                ...updatedComponents[oldParentIndex],
+                                childIds: updatedComponents[oldParentIndex].childIds.filter(id => id !== componentId)
+                            };
+                        }
+                    }
+
+                    // Then, update new parent's childIds if this is a container
+                    if (!isRootLevel) {
+                        const newParentIndex = updatedComponents.findIndex(c => c.id === containerId);
+                        if (newParentIndex !== -1) {
+                            // Use the exact order from newSiblingOrder for childIds
+                            updatedComponents[newParentIndex] = {
+                                ...updatedComponents[newParentIndex],
+                                childIds: newSiblingOrder.map(s => s.id)
+                            };
+                        }
+                    }
+
+                    // Finally, assign sequential z-indexes to maintain visual order
+                    updatedComponents = updatedComponents.map(c => {
+                        // Only update components at this level
+                        const orderIndex = newSiblingOrder.findIndex(s => s.id === c.id);
+                        if (orderIndex !== -1) {
+                            return {
+                                ...c,
+                                zIndex: orderIndex * 10 // Multiply by 10 to leave gaps
+                            };
+                        }
+                        return c;
+                    });
+
+                    // Log z-indexes for debugging
+                    console.log(`Z-indexes: ${newSiblingOrder.map((s, i) => `${s.id}: ${i * 10}`).join(', ')}`);
+
+                    // Return completely new state
                     return {
                         widgets: {
                             ...state.widgets,
@@ -934,8 +1053,16 @@ export const useWidgetStore = create<WidgetStore>()(
                         }
                     };
                 });
+
+                // Trigger re-render via eventBus
+                eventBus.publish('component:reordered', { widgetId, containerId, componentId, targetId, position });
+                eventBus.publish('hierarchy:changed', { widgetId });
             },
 
+            /**
+             * Convert widgets to ReactFlow nodes
+             * @returns Array of node objects for ReactFlow
+             */
             convertToNodes: () => {
                 const { widgets } = get();
 
@@ -952,34 +1079,21 @@ export const useWidgetStore = create<WidgetStore>()(
                         data: widget,
                         dragHandle: '.drag-handle__widget'
                     }));
-                // .forEach(widget => {
-                //     nodes.push({
-                //         id: widget.id,
-                //         type: 'widget',
-                //         position: PositionUtils.toXYPosition(widget.position),
-                //         data: widget,
-                //         draggable: true,
-                //         selectable: true
-                //     });
-                // });
-
-                // return nodes;
             },
 
             /**
-             * Get a widget by its ID.
-             * @param id The ID of the widget to get.
-             * @returns The widget with the given ID, or undefined if it doesn't exist.
+             * Get a widget by its ID
+             * @param id The ID of the widget to get
+             * @returns The widget or undefined if not found
              */
             getWidget: (id) => {
                 return get().widgets[id];
             },
 
             /**
-             * Get all visible widgets. If a display type is provided, only
-             * widgets with that display type are returned.
-             * @param displayType The display type to filter by.
-             * @returns An array of visible widgets.
+             * Get all visible widgets of the optional type
+             * @param displayType Optional display type filter
+             * @returns Array of visible widgets
              */
             getVisibleWidgets: (displayType) => {
                 const { widgets } = get();
@@ -991,11 +1105,9 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
-             * Purge the store by clearing all or some widgets and their components.
-             * Returns an object with a single property: `widgetCount`, which is the count of widgets that were cleared.
-             * @param {Object} [options] - Optional parameters to control the purge behavior.
-             * @param {boolean} [options.keepWidgets=false] - If true, widgets and their components will not be cleared.
-             * @returns {Object} - An object with a single property: `widgetCount`, which is the count of widgets that were cleared.
+             * Purge the store by clearing widgets
+             * @param options Options for controlling what is kept
+             * @returns Count of widgets cleared
              */
             purgeStore: (options = {}) => {
                 const state = get();
@@ -1016,8 +1128,8 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
-             * Set the active widget.
-             * @param id The ID of the widget to set as active.
+             * Set the active widget
+             * @param id The ID of the widget to set as active
              */
             setActiveWidget: (id) => {
                 set({ activeWidgetId: id });
@@ -1029,7 +1141,10 @@ export const useWidgetStore = create<WidgetStore>()(
     )
 );
 
-// Custom hook for subscribing to widget changes
+/**
+ * Hook for subscribing to widget changes
+ * @param callback Callback function to run on widget changes
+ */
 export const useWidgetChanges = (callback: () => void) => {
     useEffect(() => {
         // Use Zustand's built-in subscription mechanism
@@ -1041,3 +1156,24 @@ export const useWidgetChanges = (callback: () => void) => {
         return unsubscribe;
     }, [callback]);
 };
+
+/**
+ * Hook to get the active widget
+ * @returns The currently active widget or undefined
+ */
+export function useActiveWidget() {
+    const activeWidgetId = useWidgetStore(state => state.activeWidgetId);
+    const getWidget = useWidgetStore(state => state.getWidget);
+
+    return activeWidgetId ? getWidget(activeWidgetId) : undefined;
+}
+
+/**
+ * Hook to get a widget by ID
+ * @param id Widget ID to retrieve
+ * @returns The widget or undefined
+ */
+export function useWidget(id: EntityId | null) {
+    const getWidget = useWidgetStore(state => state.getWidget);
+    return id ? getWidget(id) : undefined;
+}

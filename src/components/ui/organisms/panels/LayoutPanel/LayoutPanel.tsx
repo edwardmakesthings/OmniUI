@@ -1,44 +1,78 @@
 import { BasePanel } from "../BasePanel";
-import { usePanelConfig } from "@/store/uiStore";
+import { usePanelConfig, useUIStore } from "@/store/uiStore";
 import { TreeView, TreeItem } from "@/components/ui/atoms/TreeView";
-import { useWidgetStore } from "@/store/widgetStore";
+import { useWidgetStore } from "@/features/builder/stores/widgetStore";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityId } from "@/core/types/EntityTypes";
 import { WidgetIcon } from "@/components/ui/icons";
 import { componentIconMap } from "@/registry/componentRenderers";
 import { PushButton } from "@/components/ui/atoms";
-import { notifyWidgetChange } from "@/core/eventBus/widgetEvents";
-
-// Default icon for types not in the map
+import { useEventSubscription } from "@/hooks/useEventBus";
+import eventBus from "@/core/eventBus/eventBus";
 
 const LayoutPanel = () => {
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
     const widgetStore = useWidgetStore();
+    const selectionState = useUIStore();
     const widgets = widgetStore.getVisibleWidgets();
 
-    // State for tracking selected items
-    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    // State for tracking expanded items in tree view
     const [expandedIds, setExpandedIds] = useState<string[]>([]);
     const [forceRender, setForceRender] = useState(0);
 
     // Track initial expansion
     const initialExpansionRef = useRef(false);
 
+    // Get selected component info from selection store
+    const selectedTreeItem = useMemo(() => {
+        const { selectedComponentId, selectedWidgetId } = selectionState;
+        if (!selectedComponentId || !selectedWidgetId) return null;
+
+        // Format: widgetId/componentId
+        return `${selectedWidgetId}/${selectedComponentId}`;
+    }, [selectionState.selectedComponentId, selectionState.selectedWidgetId]);
+
     // Make the layout hierarchy store globally available for cross-component access
     useEffect(() => {
         // Create a global reference to this component's functionality
         window._layoutHierarchyStore = {
-            selectItem: (id: string) => {
-                setSelectedIds([id]);
+            selectItem: (id: EntityId) => {
+                // Handle widget-only selection
+                if (id && !id.includes("/")) {
+                    widgetStore.setActiveWidget(id as EntityId);
+                    selectionState.selectComponent(null, id as EntityId, {
+                        syncWithLayoutPanel: false,
+                    });
+                    return;
+                }
+
+                // Handle component selection (format: widgetId/componentId)
+                if (id) {
+                    const [widgetId, componentId] = id.split("/") as [
+                        EntityId,
+                        EntityId
+                    ];
+                    selectionState.selectComponent(componentId, widgetId, {
+                        syncWithLayoutPanel: false,
+                    });
+                } else {
+                    // Handle deselection
+                    selectionState.deselectAll();
+                }
             },
-            getSelectedItems: () => selectedIds,
+            getSelectedItems: () => {
+                const { selectedComponentId, selectedWidgetId } =
+                    selectionState;
+                if (!selectedComponentId || !selectedWidgetId) return [];
+                return [`${selectedWidgetId}/${selectedComponentId}`];
+            },
             refreshView: () => setForceRender((prev) => prev + 1),
         };
 
         return () => {
             delete window._layoutHierarchyStore;
         };
-    }, [selectedIds]);
+    }, [selectionState, widgetStore]);
 
     // Mark this panel for targeting from events
     useEffect(() => {
@@ -57,22 +91,18 @@ const LayoutPanel = () => {
             const widgetIds = widgets.map((w) => w.id);
             setExpandedIds(widgetIds);
         }
-    }, []);
+    }, [widgets]);
 
-    // Create an event listener for widget updates
-    useEffect(() => {
-        const handleWidgetUpdate = (e: Event) => {
-            // Safely cast to CustomEvent
-            const customEvent = e as CustomEvent;
-            console.log("Layout panel received event:", customEvent.detail);
-
-            // Trigger a re-render
+    // Handle widget updates
+    useEventSubscription(
+        "widget:updated",
+        (event) => {
+            console.log("Layout panel received widget update:", event.data);
             setForceRender((prev) => prev + 1);
 
-            // If there's a specific widget ID, we might want to auto-expand it
-            if (customEvent.detail?.widgetId) {
-                const { widgetId } = customEvent.detail;
-                // Add to expanded IDs if not already expanded
+            // Auto-expand the widget that was updated
+            if (event.data?.widgetId) {
+                const { widgetId } = event.data;
                 setExpandedIds((prev) => {
                     if (!prev.includes(widgetId)) {
                         return [...prev, widgetId];
@@ -80,47 +110,60 @@ const LayoutPanel = () => {
                     return prev;
                 });
             }
-        };
+        },
+        []
+    );
 
-        // Register this panel for events
-        import("@/core/eventBus/widgetEvents").then((module) => {
-            module.registerLayoutPanelForEvents();
-        });
+    // Handle component addition
+    useEventSubscription(
+        "component:added",
+        (event) => {
+            // console.log(
+            //     "Layout panel received component addition:",
+            //     event.data
+            // );
+            setForceRender((prev) => prev + 1);
 
-        // Add event listeners to multiple event types
-        document.addEventListener("widget-updated", handleWidgetUpdate);
-        document.addEventListener(
-            "component-hierarchy-changed",
-            handleWidgetUpdate
-        );
-
-        // Add directly to panel element too
-        const panel = document.querySelector(
-            '[data-panel-id="layout-hierarchy"]'
-        );
-        if (panel) {
-            panel.addEventListener("widget-updated", handleWidgetUpdate);
-            panel.addEventListener(
-                "component-hierarchy-changed",
-                handleWidgetUpdate
-            );
-        }
-
-        return () => {
-            document.removeEventListener("widget-updated", handleWidgetUpdate);
-            document.removeEventListener(
-                "component-hierarchy-changed",
-                handleWidgetUpdate
-            );
-            if (panel) {
-                panel.removeEventListener("widget-updated", handleWidgetUpdate);
-                panel.removeEventListener(
-                    "component-hierarchy-changed",
-                    handleWidgetUpdate
-                );
+            // Auto-expand the parent widget
+            if (event.data?.widgetId) {
+                const { widgetId } = event.data;
+                setExpandedIds((prev) => {
+                    if (!prev.includes(widgetId)) {
+                        return [...prev, widgetId];
+                    }
+                    return prev;
+                });
             }
-        };
-    }, []);
+        },
+        []
+    );
+
+    // Handle component deletion
+    useEventSubscription(
+        "component:deleted",
+        () => {
+            setForceRender((prev) => prev + 1);
+        },
+        []
+    );
+
+    // Handle component updates
+    useEventSubscription(
+        "component:updated",
+        () => {
+            setForceRender((prev) => prev + 1);
+        },
+        []
+    );
+
+    // Handle hierarchy changes
+    useEventSubscription(
+        "hierarchy:changed",
+        () => {
+            setForceRender((prev) => prev + 1);
+        },
+        []
+    );
 
     // Build tree data for widgets and their components
     const treeData = useMemo(() => {
@@ -217,7 +260,7 @@ const LayoutPanel = () => {
             processUpdatedHierarchy(items);
 
             // Notify about hierarchy changes
-            notifyWidgetChange(widgetId, "hierarchyChanged");
+            eventBus.publish("hierarchy:changed", { widgetId });
         },
         [widgetStore]
     );
@@ -225,39 +268,43 @@ const LayoutPanel = () => {
     // Handle selection
     const handleSelectionChange = useCallback(
         (ids: string[]) => {
-            setSelectedIds(ids);
+            if (!ids.length) {
+                // Deselect all
+                selectionState.deselectAll();
+                return;
+            }
+
+            const selectedId = ids[0];
 
             // If a component is selected (format: widget-123/component-456)
-            if (ids.length === 1 && ids[0].includes("/")) {
-                // Extract widget and component IDs (format: widget-123/component-456)
-                const [widgetId, componentId] = ids[0].split("/") as [
+            if (selectedId.includes("/")) {
+                // Extract widget and component IDs
+                const [widgetId, componentId] = selectedId.split("/") as [
                     EntityId,
                     EntityId
                 ];
 
-                // Find the component instance and select it
-                const widget = widgetStore.getWidget(widgetId);
-                if (widget) {
-                    const component = widget.components.find(
-                        (c) => c.id === componentId
-                    );
-                    if (component) {
-                        // Focus the widget and select the component in UI
-                        widgetStore.setActiveWidget(widgetId);
+                // Set the selection in the selection store
+                selectionState.selectComponent(componentId, widgetId, {
+                    syncWithLayoutPanel: false,
+                });
+            } else {
+                // Just a widget selected, no component
+                widgetStore.setActiveWidget(selectedId as EntityId);
 
-                        // Find the component in DOM and trigger selection
-                        const componentEl = document.querySelector(
-                            `[data-widget-id="${widgetId}"] [data-component-id="${componentId}"]`
-                        );
-                        if (componentEl) {
-                            (componentEl as HTMLElement).click();
-                        }
-                    }
-                }
+                // Clear component selection
+                selectionState.selectComponent(null, selectedId as EntityId, {
+                    syncWithLayoutPanel: false,
+                });
             }
         },
-        [widgetStore]
+        [selectionState, widgetStore]
     );
+
+    // Delete selected component
+    const handleDeleteComponent = useCallback(() => {
+        selectionState.deleteSelectedComponent();
+    }, [selectionState]);
 
     // Manual refresh button handler
     const handleManualRefresh = useCallback(() => {
@@ -279,7 +326,15 @@ const LayoutPanel = () => {
                 </div>
             ) : (
                 <>
-                    <div className="p-2 flex justify-end">
+                    <div className="p-2 flex justify-between">
+                        <PushButton
+                            onClick={handleDeleteComponent}
+                            variant="ghost"
+                            className="text-xs"
+                            disabled={!selectionState.selectedComponentId}
+                        >
+                            Delete
+                        </PushButton>
                         <PushButton
                             onClick={handleManualRefresh}
                             variant="ghost"
@@ -290,7 +345,7 @@ const LayoutPanel = () => {
                     </div>
                     <TreeView
                         items={treeData}
-                        selectedIds={selectedIds}
+                        selectedIds={selectedTreeItem ? [selectedTreeItem] : []}
                         expandedIds={expandedIds}
                         onSelectionChange={handleSelectionChange}
                         onExpansionChange={setExpandedIds}
@@ -302,16 +357,5 @@ const LayoutPanel = () => {
         </BasePanel>
     );
 };
-
-// Add global type definition for layout hierarchy store
-declare global {
-    interface Window {
-        _layoutHierarchyStore?: {
-            selectItem: (id: string) => void;
-            getSelectedItems: () => string[];
-            refreshView: () => void;
-        };
-    }
-}
 
 export default LayoutPanel;

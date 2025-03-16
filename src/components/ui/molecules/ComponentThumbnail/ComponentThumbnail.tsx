@@ -14,7 +14,7 @@ import {
     CompPushButtonIcon,
     CompMenuDropdownIcon,
 } from "@/components/ui/icons";
-import { useComponentPanelDrag } from "@/core/dragDrop/widgetHooks";
+import { useComponentPanelDrag } from "@/features/builder/dragDrop/hooks/useComponentDrag";
 
 export interface ComponentThumbnailProps {
     component: ComponentDefinition;

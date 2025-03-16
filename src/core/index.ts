@@ -1,7 +1,7 @@
 // src/core/index.ts
-import { initializeComponentRegistry, loadComponentRegistry } from '../registry/componentRegistry';
+import { initializeComponentRegistry, loadComponentRegistry } from '@/registry/componentRegistry';
 import { registerComponentRenderers } from '@/registry/componentRenderers';
-import { useWidgetStore } from '@/store/widgetStore';
+import { useWidgetStore } from '@/features/builder/stores/widgetStore';
 import { useComponentStore } from '@/store/componentStore';
 import { useUIStore } from '@/store/uiStore';
 
@@ -28,9 +28,6 @@ export async function initializeCoreSystem(options: InitOptions = {}) {
         });
         useUIStore.getState(); // Initialize UI store
     }
-
-    // Make widget store available globally
-    window.__WIDGET_STORE__ = useWidgetStore;
 
     // Initialize component registry
     const registry = initializeComponentRegistry();
@@ -78,4 +75,4 @@ export * from './types/Geometry';
 export * from './types/Measurement';
 export * from './types/UI';
 export * from './base/StoreError';
-export * from './dragDrop/ComponentDragDropHelper';
+export * from '../features/builder/dragDrop/ComponentDragDrop';

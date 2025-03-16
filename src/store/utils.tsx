@@ -1,5 +1,5 @@
 import { useComponentStore } from "@/store/componentStore";
-import { useWidgetStore } from "@/store/widgetStore";
+import { useWidgetStore } from "@/features/builder/stores/widgetStore";
 
 /**
  * Purges all stores in the correct order to prevent reference errors
