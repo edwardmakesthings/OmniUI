@@ -79,7 +79,7 @@ export const ScrollBox = ({
     // Render function for the scrollbox
     const renderScrollBox = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA

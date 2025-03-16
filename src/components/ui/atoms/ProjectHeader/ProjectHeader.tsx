@@ -18,36 +18,6 @@ const ProjectHeader = () => {
                             console.log("HERE1");
                         },
                     },
-                    {
-                        label: "Change Project Name2",
-                        value: "Change Project Name2",
-                        icon: <EditIcon />,
-                        onClick: () => {
-                            console.log("HERE2");
-                        },
-                    },
-                ]}
-            />
-            <DropdownSelect
-                label={projectName}
-                variant="default"
-                options={[
-                    {
-                        label: "Change Project Name",
-                        value: "Change Project Name",
-                        icon: <EditIcon />,
-                        onClick: () => {
-                            console.log("HERE1");
-                        },
-                    },
-                    {
-                        label: "Change Project Name2",
-                        value: "Change Project Name2",
-                        icon: <EditIcon />,
-                        onClick: () => {
-                            console.log("HERE2");
-                        },
-                    },
                 ]}
             />
         </article>

@@ -109,7 +109,7 @@ export const DropdownPanel = ({
     // Render function for the panel
     const renderDropdownPanel = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         const ariaAttributes: AriaAttributes & { role?: string } = {

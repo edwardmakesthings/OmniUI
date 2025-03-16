@@ -1,28 +1,41 @@
+/**
+ * @file src/store/componentStore.ts
+ * Core component store that manages component definitions and instances
+ * in a centralized, type-safe way.
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ComponentState } from './types';
-import { ComponentDefinition } from '../core/base/ComponentDefinition';
-import { BindingConfig, ComponentInstance, ComponentInstanceState, ExternalBindingConfig } from '../core/base/ComponentInstance';
-import { createEntityId, EntityId } from '../core/types/EntityTypes';
-import { StoreError, StoreErrorCodes } from '../core/base/StoreError';
-import { ComponentType } from '../core/types/ComponentTypes';
+import { ComponentDefinition } from '@/core/base/ComponentDefinition';
+import { BindingConfig, ComponentInstance, ComponentInstanceState, ExternalBindingConfig } from '@/core/base/ComponentInstance';
+import { createEntityId, EntityId } from '@/core/types/EntityTypes';
+import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
+import { ComponentType } from '@/core/types/ComponentTypes';
 import { nanoid } from 'nanoid';
-import { ComponentConfig } from '../core/base/ComponentConfig';
+import { ComponentConfig } from '@/core/base/ComponentConfig';
+import { defaultState } from '@/components/base/interactive';
+import { useMemo } from 'react';
 
-interface SelectionState {
-    selectedIds: Set<EntityId>;
-    lastSelected: EntityId | null;
-}
-
+/**
+ * Interface for the component store operations
+ */
 export interface ComponentStore extends ComponentState {
+    // Definition management
     addDefinition: (definition: ComponentDefinition) => void;
+    getDefinition: (id: EntityId) => ComponentDefinition;
+
+    // Instance management
     addInstance: (instance: ComponentInstance) => void;
     updateInstance: (id: EntityId, updates: Partial<ComponentInstance>) => void;
+    deleteInstance: (id: EntityId) => void;
     createFromDefinition: (definitionId: EntityId, overrides: Partial<ComponentConfig>) => ComponentInstance;
-    getDefinition: (id: EntityId) => ComponentDefinition;
     getInstance: (id: EntityId) => ComponentInstance;
+
+    // Instance state
     getInstanceState: (id: EntityId) => ComponentInstanceState;
     updateInstanceState: (id: EntityId, updates: Partial<ComponentInstanceState>) => void;
+
+    // Binding system
     registerInstanceBinding: (
         id: EntityId,
         propertyPath: string,
@@ -32,14 +45,23 @@ export interface ComponentStore extends ComponentState {
         id: EntityId,
         bindingPath: string
     ) => Promise<void>;
+
+    // Store operations
+    purgeStore: (options?: {
+        keepSystemComponents?: boolean;
+        resetToDefaults?: boolean;
+    }) => {
+        definitionCount: number;
+        instanceCount: number;
+    };
     // To be added:
     // validateInstanceBindings: (id: EntityId) => BindingValidationResult;
-    // selection: SelectionState;
-    // select: (id: EntityId, mode?: 'single' | 'toggle' | 'range') => void;
-    // deselect: (id: EntityId) => void;
-    // clearSelection: () => void;
 }
 
+/**
+ * Implementation of the component store that manages component definitions
+ * and instances with proper persistence.
+ */
 export const useComponentStore = create<ComponentStore>()(
     persist(
         (set, get) => ({
@@ -50,7 +72,7 @@ export const useComponentStore = create<ComponentStore>()(
              * Adds a new component definition to the store.
              *
              * @param definition - The component definition to be added. Must have a unique ID.
-             * @throws {StoreError} If the definition does not have an ID, a StoreError is thrown with the code 'INVALID_DEFINITION'.
+             * @throws {StoreError} If the definition does not have a valid ID.
              */
             addDefinition: (definition) => {
                 if (!definition.id) {
@@ -67,13 +89,8 @@ export const useComponentStore = create<ComponentStore>()(
 
             /**
              * Adds a new component instance to the store.
-             *
-             * @param instance - The component instance to be added, which includes
-             *  its unique identifier and definition reference.
-             * @throws {StoreError} If the instance does not have an ID, a StoreError
-             *  is thrown with the code 'INVALID_INSTANCE'. If the definition for the
-             *  instance's definitionId is not found, a StoreError is thrown with the
-             *  code 'DEFINITION_NOT_FOUND'.
+             * @param instance - The component instance to be added
+             * @throws {StoreError} If the instance is invalid or its definition is not found
              */
             addInstance: (instance) => {
                 const state = get();
@@ -99,11 +116,9 @@ export const useComponentStore = create<ComponentStore>()(
 
             /**
              * Updates an existing component instance in the store.
-             *
              * @param id - The ID of the component instance to be updated.
-             * @param updates - The partial updates to the component instance, which
-             *  can include new positions, sizes, overrides, or other customizations.
-             * @throws {StoreError} If the instance is not found, a StoreError is thrown with the code 'INSTANCE_NOT_FOUND'.
+             * @param updates - The partial updates to apply to the instance
+             * @throws {StoreError} If the instance is not found
              */
             updateInstance: (id, updates) => {
                 const state = get();
@@ -133,12 +148,34 @@ export const useComponentStore = create<ComponentStore>()(
             },
 
             /**
-             * Creates a new component instance from a given definition ID and optional overrides.
-             *
-             * @param definitionId - The ID of the component definition to create an instance from.
-             * @param overrides - Partial component config data to override the default values from the definition.
-             * @returns The newly created component instance.
-             * @throws {StoreError} If no definition is found for the provided definition ID, an error is thrown with the code 'DEFINITION_NOT_FOUND'.
+             * Deletes a component instance from the store.
+             * @param id - The ID of the instance to delete
+             * @throws {StoreError} If the instance is not found
+             */
+            deleteInstance: (id) => {
+                const state = get();
+                const instance = state.instances[id];
+
+                if (!instance) {
+                    throw new StoreError(
+                        `No instance found for ID: ${id}`,
+                        'INSTANCE_NOT_FOUND'
+                    );
+                }
+
+                // Create a copy of the instances without the deleted one
+                const newInstances = { ...state.instances };
+                delete newInstances[id];
+
+                set({ instances: newInstances });
+            },
+
+            /**
+             * Creates a new component instance from a definition.
+             * @param definitionId - The ID of the definition to instantiate
+             * @param overrides - Optional configuration overrides for the new instance
+             * @returns The newly created component instance
+             * @throws {StoreError} If the definition is not found
              */
             createFromDefinition: (definitionId, overrides) => {
                 const state = get();
@@ -156,19 +193,17 @@ export const useComponentStore = create<ComponentStore>()(
                     id: createEntityId(nanoid()),
                     definitionId: definitionId,
                     overrides: overrides,
-                    state: {
-                        isHovered: false,
-                        isFocused: false,
-                        isPressed: false,
-                        isActive: false,
-                        isDisabled: false
-                    },
+                    state: defaultState,
                     internalBindings: {},
                     externalBindings: {},
                     metadata: {
                         createdAt: new Date(),
                         updatedAt: new Date(),
-                        version: 1
+                        version: 1,
+                        definitionVersion: definition.metadata.definitionVersion,
+                        compatibilityVersion: definition.metadata.compatibilityVersion,
+                        createdBy: definition.metadata.createdBy,
+                        isUserComponent: definition.metadata.isUserComponent
                     }
                 };
 
@@ -178,10 +213,9 @@ export const useComponentStore = create<ComponentStore>()(
 
             /**
              * Retrieves a component definition from the store by its ID.
-             *
-             * @param id - The ID of the component definition to retrieve.
-             * @returns The component definition associated with the given ID.
-             * @throws {StoreError} If no definition is found for the given ID, a StoreError is thrown with the code 'DEFINITION_NOT_FOUND'.
+             * @param id - The ID of the definition to retrieve
+             * @returns The component definition
+             * @throws {StoreError} If no definition is found with the given ID
              */
             getDefinition: (id) => {
                 const state = get();
@@ -199,10 +233,9 @@ export const useComponentStore = create<ComponentStore>()(
 
             /**
              * Retrieves a component instance from the store by its ID.
-             *
-             * @param id - The ID of the component instance to retrieve.
-             * @returns The component instance associated with the given ID.
-             * @throws {StoreError} If no instance is found for the given ID, a StoreError is thrown with the code 'INSTANCE_NOT_FOUND'.
+             * @param id - The ID of the instance to retrieve
+             * @returns The component instance
+             * @throws {StoreError} If no instance is found with the given ID
              */
             getInstance: (id) => {
                 const state = get();
@@ -219,12 +252,10 @@ export const useComponentStore = create<ComponentStore>()(
             },
 
             /**
-             * Retrieves the state of a component instance by its ID or creates
-             * a default state if none is found.
-             *
-             * @param id - The ID of the component instance whose state is to be retrieved.
-             * @returns The state of the component instance associated with the given ID.
-             * @throws {StoreError} If no instance is found for the given ID, a StoreError is thrown with the code 'INSTANCE_NOT_FOUND'.
+             * Gets the state of a component instance.
+             * @param id - The ID of the component instance
+             * @returns The current state of the instance
+             * @throws {StoreError} If the instance is not found
              */
             getInstanceState(id) {
                 const instance = this.getInstance(id);
@@ -240,10 +271,9 @@ export const useComponentStore = create<ComponentStore>()(
             },
 
             /**
-             * Updates the state of a component instance by merging the given updates with the existing state.
-             *
-             * @param id - The ID of the component instance whose state is to be updated.
-             * @param updates - Partial state data to merge with the existing state.
+             * Updates the state of a component instance.
+             * @param id - The ID of the component instance
+             * @param updates - The state updates to apply
              */
             updateInstanceState(id, updates) {
                 const currentState = this.getInstanceState(id);
@@ -257,8 +287,8 @@ export const useComponentStore = create<ComponentStore>()(
             },
 
             /**
-             * Registers a binding for a property of a component instance. The
-             * binding can be either internal (binding to another component
+             * Registers a binding for a component instance property.
+             * The binding can be either internal (binding to another component
              * instance property) or external (binding to a global variable or
              * a value from a datasource).
              *
@@ -282,11 +312,9 @@ export const useComponentStore = create<ComponentStore>()(
              *      combineMode: 'all'
              *  });
              *
-             * @param id - The ID of the component instance whose property is to be bound.
-             * @param propertyPath - The path of the property to be bound. This can be a simple property
-             *     name or a nested property path, e.g. 'foo.bar'.
-             * @param bindingConfig - The configuration of the binding. If the binding is external, this
-             *     must contain a 'type' property that describes the type of the binding.
+             * @param id - The ID of the component instance
+             * @param propertyPath - The property path to bind
+             * @param bindingConfig - The binding configuration
              */
             registerInstanceBinding(id, propertyPath, bindingConfig) {
                 const instance = this.getInstance(id);
@@ -304,7 +332,7 @@ export const useComponentStore = create<ComponentStore>()(
             },
 
             /**
-             * Executes a binding for a property of a component instance. This
+             * Executes a binding for a component instance property. This
              * will check for both internal bindings (bindings to other component
              * instance properties) and external bindings (bindings to global
              * variables or values from a datasource). For internal bindings, it
@@ -313,10 +341,8 @@ export const useComponentStore = create<ComponentStore>()(
              * it will need to call the target with the given parameters and update the
              * target property with the result.
              *
-             * @param id - The ID of the component instance whose property is to be bound.
-             * @param bindingPath - The path of the property to be bound. This can be a simple property
-             *     name or a nested property path, e.g. 'foo.bar'.
-             * @throws {StoreError} If no binding is found for the given path, a StoreError is thrown with the code 'BINDING_NOT_FOUND'.
+             * @param id - The ID of the component instance
+             * @param bindingPath - The binding path to execute
              */
             async executeInstanceBinding(id, bindingPath) {
                 const instance = this.getInstance(id);
@@ -324,9 +350,7 @@ export const useComponentStore = create<ComponentStore>()(
                 // First check for internal bindings
                 const internalBinding = instance.internalBindings?.[bindingPath];
                 if (internalBinding) {
-                    // Evaluate all conditions based on combineMode. Supports
-                    // async for future use where useful. Gets condition results
-                    // and their transformed values
+                    // Evaluate all conditions based on combineMode
                     const conditionEvaluations = await Promise.all(
                         internalBinding.conditions.map(async condition => {
                             const sourceInstance = this.getInstance(condition.sourceInstanceId);
@@ -373,6 +397,7 @@ export const useComponentStore = create<ComponentStore>()(
                     }
                     return;
                 }
+
                 // Check for external binding
                 const externalBinding = instance.externalBindings?.[bindingPath];
                 if (externalBinding) {
@@ -391,6 +416,63 @@ export const useComponentStore = create<ComponentStore>()(
                     `No binding found for path: ${bindingPath}`,
                     StoreErrorCodes.BINDING_NOT_FOUND
                 );
+            },
+
+            /**
+             * Purges the component store by clearing definitions and instances.
+             * @param options - Options to control what gets purged
+             * @returns The count of purged items
+             */
+            purgeStore: (options = {}) => {
+                const state = get();
+                const { keepSystemComponents = false, resetToDefaults = false } = options;
+
+                // Count for return value
+                const definitionCount = Object.keys(state.definitions).length;
+                const instanceCount = Object.keys(state.instances).length;
+
+                // Create an empty state to set
+                const newState: Partial<ComponentState> = {
+                    instances: {} // Always clear instances
+                };
+
+                // Handle definitions based on options
+                if (keepSystemComponents) {
+                    // Keep only system components (those not created by users)
+                    const systemDefinitions = Object.entries(state.definitions)
+                        .filter(([_, def]) => !def.metadata.isUserComponent)
+                        .reduce((acc, [id, def]) => {
+                            acc[id as EntityId] = def;
+                            return acc;
+                        }, {} as Record<EntityId, ComponentDefinition>);
+
+                    newState.definitions = systemDefinitions;
+                } else {
+                    // Clear all definitions
+                    newState.definitions = {};
+                }
+
+                // Set the new state first
+                set(newState);
+
+                // Initialize defaults if requested
+                if (resetToDefaults) {
+                    // Import and register default components
+                    import('@/registry/categories/layoutComponents').then(module => {
+                        module.registerLayoutComponents();
+                    });
+                    import('@/registry/categories/controlComponents').then(module => {
+                        module.registerControlComponents();
+                    });
+                    import('@/registry/categories/displayComponents').then(module => {
+                        module.registerDisplayComponents();
+                    });
+                }
+
+                return {
+                    definitionCount,
+                    instanceCount
+                };
             }
         }),
         {
@@ -399,158 +481,132 @@ export const useComponentStore = create<ComponentStore>()(
     )
 );
 
-// Helper hooks for common operations and safer state access
-
-/////////////////////
-// Basic selectors //
-/////////////////////
-
 /**
- * Hook to retrieve a component definition from the store by its ID.
- *
- * @param id - The ID of the component definition to retrieve, or null.
- * @returns The component definition associated with the given ID, or undefined if the ID is null.
+ * Hook to get a component definition by ID
+ * @param id - The ID of the definition or null
+ * @returns The component definition or undefined
  */
 export function useDefinition(id: EntityId | null) {
-    return useComponentStore((state) =>
-        id ? state.definitions[id] : undefined
-    );
+    const definitionsMap = useComponentStore(state => state.definitions);
+    return useMemo(() => {
+        if (!id) return undefined;
+        return definitionsMap[id];
+    }, [definitionsMap, id]);
 }
 
 /**
- * Hook to retrieve a component instance from the store by its ID.
- *
- * @param id - The ID of the component instance to retrieve, or null.
- * @returns The component instance associated with the given ID, or undefined if the ID is null.
+ * Hook to get a component instance by ID
+ * @param id - The ID of the instance or null
+ * @returns The component instance or undefined
  */
 export function useInstance(id: EntityId | null) {
-    return useComponentStore((state) =>
-        id ? state.instances[id] : undefined
-    );
+    const instancesMap = useComponentStore(state => state.instances);
+    return useMemo(() => {
+        if (!id) return undefined;
+        return instancesMap[id];
+    }, [instancesMap, id]);
 }
 
-//////////////////////////
-// Collection Selectors //
-//////////////////////////
-
 /**
- * Hook to retrieve all component definitions from the store.
- *
- * @returns An array of all component definitions in the store.
+ * Hook to get all component definitions
+ * @returns Array of all component definitions
  */
 export function useAllDefinitions() {
-    return useComponentStore((state) =>
-        Object.values(state.definitions)
-    );
+    const definitionsMap = useComponentStore(state => state.definitions);
+    return useMemo(() => Object.values(definitionsMap), [definitionsMap]);
 }
 
 /**
- * Hook to retrieve all component instances from the store.
- *
- * @returns An array of all component instances in the store.
+ * Hook to get all component instances
+ * @returns Array of all component instances
  */
 export function useAllInstances() {
-    return useComponentStore((state) =>
-        Object.values(state.instances)
-    );
+    const instancesMap = useComponentStore(state => state.instances);
+    return useMemo(() => Object.values(instancesMap), [instancesMap]);
 }
 
-////////////////////////
-// Filtered Selectors //
-////////////////////////
-
 /**
- * Hook to retrieve all component definitions from the store that match the given type.
- *
- * @param type - The type of component definitions to retrieve.
- * @returns An array of component definitions that match the given type.
+ * Hook to get component definitions by type
+ * @param type - The component type to filter by
+ * @returns Array of definitions of the specified type
  */
 export function useDefinitionsByType(type: ComponentType) {
-    return useComponentStore((state) =>
-        Object.values(state.definitions).filter(def =>
-            def.type === type
-        )
-    );
+    const definitions = useAllDefinitions();
+    return useMemo(() => {
+        return definitions.filter(def => def.type === type);
+    }, [definitions, type]);
 }
 
 /**
- * Hook to retrieve all component instances from the store that have the given definition ID.
- *
- * @param definitionId - The ID of the component definition whose instances to retrieve.
- * @returns An array of component instances that have the given definition ID.
+ * Hook to get instances by their definition ID
+ * @param definitionId - The definition ID to filter by
+ * @returns Array of instances using the specified definition
  */
 export function useInstancesByDefinition(definitionId: EntityId) {
-    return useComponentStore((state) =>
-        Object.values(state.instances).filter(instance =>
-            instance.definitionId === definitionId
-        )
-    );
+    const instances = useAllInstances();
+    return useMemo(() => {
+        return instances.filter(instance => instance.definitionId === definitionId);
+    }, [instances, definitionId]);
 }
 
-/////////////////////
-// Operation Hooks //
-/////////////////////
-
 /**
- * Hook to retrieve a component instance from the store and provide a function to update it.
- *
- * @param id - The ID of the component instance to retrieve.
- * @returns An object containing the retrieved instance and an update function that can be used to update the instance.
- * @throws {StoreError} If no instance is found for the given ID, a StoreError is thrown with the code 'INSTANCE_NOT_FOUND'.
+ * Hook for managing a component instance with update capability
+ * @param id - The ID of the instance to manage
+ * @returns Object with the instance and an update function
  */
 export function useInstanceManager(id: EntityId) {
     const instance = useInstance(id);
-    const updateInstance = useComponentStore((state) => state.updateInstance);
+    const updateInstance = useComponentStore(state => state.updateInstance);
 
-    return {
+    return useMemo(() => ({
         instance,
-        update: (updates: Partial<ComponentInstance>) => {
+        update: (updates: Partial<any>) => {
             if (instance) {
                 updateInstance(id, updates);
             }
         }
-    };
+    }), [instance, updateInstance, id]);
 }
 
 /**
- * Hook to retrieve and manage multiple component instances by their IDs.
- *
- * @param ids - The IDs of the component instances to retrieve and manage.
- * @returns An object containing the retrieved instances and an update function that can be used to update all of them.
+ * Hook for managing multiple component instances
+ * @param ids - Array of instance IDs to manage
+ * @returns Object with instances and a function to update all
  */
 export function useMultiInstanceManager(ids: EntityId[]) {
-    const instances = useComponentStore((state) =>
-        ids.map(id => state.instances[id]).filter(Boolean)
-    );
-    const updateInstance = useComponentStore((state) => state.updateInstance);
-    const getState = useComponentStore.getState;
+    const instancesMap = useComponentStore(state => state.instances);
+    const updateInstance = useComponentStore(state => state.updateInstance);
 
-    return {
-        instances,
-        updateAll: (updates: Partial<ComponentInstance>) => {
-            const currentState = getState()
-            ids.forEach(id => {
-                if (currentState.instances[id]) {
-                    updateInstance(id, updates);
-                }
-            });
-        }
-    };
+    return useMemo(() => {
+        const filteredInstances = ids
+            .map(id => instancesMap[id])
+            .filter(Boolean);
+
+        return {
+            instances: filteredInstances,
+            updateAll: (updates: Partial<any>) => {
+                ids.forEach(id => {
+                    if (instancesMap[id]) {
+                        updateInstance(id, updates);
+                    }
+                });
+            }
+        };
+    }, [instancesMap, updateInstance, ids]);
 }
 
-
 /**
- * Hook to get the functions for creating a new component definition and instance from scratch or from an existing definition.
- *
- * @returns An object containing the following functions:
- * - `createDefinition(definition: ComponentDefinition)`: Creates a new component definition in the store.
- * - `createInstance(instance: ComponentInstance)`: Creates a new component instance from scratch in the store.
- * - `createFromDefinition(definition: ComponentDefinition)`: Creates a new component instance from an existing definition in the store.
+ * Hook for component creation operations
+ * @returns Object with functions for creating definitions and instances
  */
 export function useComponentCreation() {
-    return {
-        createDefinition: useComponentStore((state) => state.addDefinition),
-        createInstance: useComponentStore((state) => state.addInstance),
-        createFromDefinition: useComponentStore((state) => state.createFromDefinition)
-    };
+    const addDefinition = useComponentStore(state => state.addDefinition);
+    const addInstance = useComponentStore(state => state.addInstance);
+    const createFromDefinition = useComponentStore(state => state.createFromDefinition);
+
+    return useMemo(() => ({
+        createDefinition: addDefinition,
+        createInstance: addInstance,
+        createFromDefinition
+    }), [addDefinition, addInstance, createFromDefinition]);
 }

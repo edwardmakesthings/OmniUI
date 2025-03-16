@@ -7,6 +7,7 @@ import { ComponentConfig } from './ComponentConfig';
  */
 export interface ComponentDefinition extends BaseDefinition {
     type: ComponentType;
+    category: "layout" | "control" | "display";
     isLayout: boolean;
     config: ComponentConfig;
 }
