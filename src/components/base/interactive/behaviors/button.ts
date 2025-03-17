@@ -13,7 +13,7 @@ export const buttonBehavior: BehaviorDefinition<BaseState> = {
         isEditing: false,
         isDragging: false
     },
-    handleStateChange: (currentState: BaseState, event: string) => {
+    handleStateChange: (_currentState: BaseState, event: string) => {
         switch (event) {
             case 'mousedown':
                 return { isPressed: true };

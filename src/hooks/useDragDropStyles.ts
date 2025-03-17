@@ -168,12 +168,6 @@ export function useDragDropStyles(styleId = 'component-drag-drop-styles'): boole
           justify-content: center !important;
       }
 
-      .component-container.empty-container::after {
-          content: "Drop components here";
-          color: rgba(100, 100, 100, 0.7);
-          font-size: 14px;
-      }
-
       /* Container component styling */
       [data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
       [data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {

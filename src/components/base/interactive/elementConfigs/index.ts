@@ -16,7 +16,7 @@ export const elementConfigurations: ElementConfigurations = {
     span: spanConfig,
 };
 
-export type { ElementConfig, ElementType, ElementConfigurations } from './types';
+export type { ElementConfig, ElementConfigurations } from './types';
 export { default as buttonConfig } from "./button";
 export { default as divConfig } from "./div";
 export { default as inputConfig } from "./input";

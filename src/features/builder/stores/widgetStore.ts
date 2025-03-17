@@ -10,7 +10,7 @@ import { Node } from "@xyflow/react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useEffect } from "react";
-import { PanelIcon } from "@/components/ui";
+import { PanelIcon, WidgetIcon } from "@/components/ui";
 import { UnitType } from "@/core/types/Measurement";
 import { componentIconMap } from "@/registry/componentRenderers";
 import eventBus from "@/core/eventBus/eventBus";
@@ -115,10 +115,10 @@ export interface WidgetStore {
     ) => WidgetComponent | null;
 
     moveComponent: (
-        widgetId: EntityId,
+        sourceWidgetId: EntityId,
         componentId: EntityId,
         newParentId?: EntityId, // undefined means move to root
-        position?: Position
+        destinationWidgetId?: EntityId, // undefined means same widget as source
     ) => void;
 
     // Get component hierarchy
@@ -655,95 +655,205 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
-             * Move a component to a new parent within a widget
-             * @param widgetId The widget containing the component
+             * Move a component within or between widgets
+             * @param sourceWidgetId Source widget containing the component
              * @param componentId The component to move
-             * @param newParentId The new parent ID or undefined for root level
-             * @param position Optional position override
+             * @param newParentId New parent ID or undefined for root level (optional)
+             * @param destinationWidgetId Destination widget if different from source (optional)
              */
             moveComponent: (
-                widgetId: EntityId,
+                sourceWidgetId: EntityId,
                 componentId: EntityId,
-                newParentId?: EntityId // undefined means move to root
+                newParentId?: EntityId, // undefined means move to root
+                destinationWidgetId?: EntityId, // undefined means same widget as source
             ) => {
                 set(state => {
-                    const widget = state.widgets[widgetId];
-                    if (!widget) return state;
+                    // Get source widget and destination widget (same as source if not specified)
+                    const sourceWidget = state.widgets[sourceWidgetId];
+                    const destWidgetId = destinationWidgetId || sourceWidgetId;
+                    const destWidget = state.widgets[destWidgetId];
+
+                    if (!sourceWidget || !destWidget) {
+                        console.error("Source or destination widget not found");
+                        return state;
+                    }
 
                     // Find the component to move
-                    const componentToMove = widget.components.find(c => c.id === componentId);
-                    if (!componentToMove) return state;
+                    const componentToMove = sourceWidget.components.find(c => c.id === componentId);
+                    if (!componentToMove) {
+                        console.error(`Component ${componentId} not found in source widget`);
+                        return state;
+                    }
 
-                    // Find the old parent (if any)
-                    const oldParentId = componentToMove.parentId;
-                    const oldParent = oldParentId ? widget.components.find(c => c.id === oldParentId) : null;
-
-                    // Find the new parent (if any)
-                    const newParent = newParentId ? widget.components.find(c => c.id === newParentId) : null;
-
-                    // Check for circular reference (can't make a component its own ancestor)
-                    if (newParentId) {
-                        let current = newParent;
+                    // For same-widget moves, check for circular reference
+                    if (destWidgetId === sourceWidgetId && newParentId) {
+                        let current = sourceWidget.components.find(c => c.id === newParentId);
                         let foundCircular = false;
 
+                        // Check if the new parent is a descendant of the component being moved
                         while (current && current.parentId) {
                             if (current.parentId === componentId) {
                                 console.warn("Cannot create circular reference in component hierarchy");
                                 foundCircular = true;
                                 break;
                             }
-                            current = widget.components.find(c => c.id === current!.parentId);
+                            current = sourceWidget.components.find(c => c.id === current!.parentId);
                         }
 
                         if (foundCircular) return state;
                     }
 
-                    // Create a new components array with all the updates
-                    let updatedComponents = [...widget.components];
+                    // Create a new state object
+                    const newState = { ...state };
 
-                    // 1. Update the moved component's parent
-                    const componentIndex = updatedComponents.findIndex(c => c.id === componentId);
-                    updatedComponents[componentIndex] = {
-                        ...updatedComponents[componentIndex],
-                        parentId: newParentId || undefined
-                    };
+                    // Handle same-widget moves (simpler case)
+                    if (destWidgetId === sourceWidgetId) {
+                        const oldParentId = componentToMove.parentId;
 
-                    // 2. Update the old parent's childIds if needed
-                    if (oldParentId) {
-                        const oldParentIndex = updatedComponents.findIndex(c => c.id === oldParentId);
-                        if (oldParentIndex >= 0) {
-                            updatedComponents[oldParentIndex] = {
-                                ...updatedComponents[oldParentIndex],
-                                childIds: updatedComponents[oldParentIndex].childIds.filter(id => id !== componentId)
-                            };
-                        }
-                    }
-
-                    // 3. Update the new parent's childIds if needed
-                    if (newParentId) {
-                        const newParentIndex = updatedComponents.findIndex(c => c.id === newParentId);
-                        if (newParentIndex >= 0) {
-                            // Add to the end of the children list (maintains array order)
-                            updatedComponents[newParentIndex] = {
-                                ...updatedComponents[newParentIndex],
-                                childIds: [...updatedComponents[newParentIndex].childIds, componentId]
-                            };
-                        }
-                    }
-
-                    // Return the updated state with all changes applied at once
-                    return {
-                        widgets: {
-                            ...state.widgets,
-                            [widgetId]: {
-                                ...widget,
-                                components: updatedComponents
+                        // Update the component's parent
+                        const updatedComponents = sourceWidget.components.map(c => {
+                            if (c.id === componentId) {
+                                // Update the moved component
+                                return { ...c, parentId: newParentId || undefined };
                             }
+                            else if (c.id === oldParentId) {
+                                // Update old parent's childIds
+                                return {
+                                    ...c,
+                                    childIds: c.childIds.filter(id => id !== componentId)
+                                };
+                            }
+                            else if (c.id === newParentId) {
+                                // Update new parent's childIds
+                                return {
+                                    ...c,
+                                    childIds: [...c.childIds, componentId]
+                                };
+                            }
+                            return c;
+                        });
+
+                        // Update the widget
+                        newState.widgets[sourceWidgetId] = {
+                            ...sourceWidget,
+                            components: updatedComponents
+                        };
+                    }
+                    // Handle cross-widget moves
+                    else {
+                        // Helper function to get a component and all its descendants
+                        const getComponentWithChildren = (
+                            components: WidgetComponent[],
+                            rootId: EntityId
+                        ): WidgetComponent[] => {
+                            const result: WidgetComponent[] = [];
+
+                            // First get the root component
+                            const rootComponent = components.find(c => c.id === rootId);
+                            if (!rootComponent) return result;
+
+                            // Add root component
+                            result.push(rootComponent);
+
+                            // Recursively add children
+                            const addChildren = (parentId: EntityId) => {
+                                const children = components.filter(c => c.parentId === parentId);
+                                for (const child of children) {
+                                    result.push(child);
+                                    addChildren(child.id);
+                                }
+                            };
+
+                            // Start recursion from root
+                            addChildren(rootId);
+                            return result;
+                        };
+
+                        // Get the component and all its descendants
+                        const componentsToMove = getComponentWithChildren(sourceWidget.components, componentId);
+
+                        // 1. Remove components from source widget
+                        newState.widgets[sourceWidgetId] = {
+                            ...sourceWidget,
+                            components: sourceWidget.components.filter(c =>
+                                !componentsToMove.some(moveComp => moveComp.id === c.id)
+                            )
+                        };
+
+                        // 2. Update parent references in source widget components
+                        newState.widgets[sourceWidgetId].components = newState.widgets[sourceWidgetId].components.map(c => {
+                            // Check if this component has any of the moved components as children
+                            const updatedChildIds = c.childIds.filter(childId =>
+                                !componentsToMove.some(moveComp => moveComp.id === childId)
+                            );
+
+                            // Only update if childIds changed
+                            if (updatedChildIds.length !== c.childIds.length) {
+                                return { ...c, childIds: updatedChildIds };
+                            }
+                            return c;
+                        });
+
+                        // 3. Update the moved components with new parent references
+                        const modifiedComponentsToMove = componentsToMove.map(c => {
+                            // If this is the root component being moved, update its parent
+                            if (c.id === componentId) {
+                                return { ...c, parentId: newParentId || undefined };
+                            }
+
+                            // For child components, keep them as they are
+                            return c;
+                        });
+
+                        // 4. Add components to destination widget
+                        newState.widgets[destWidgetId] = {
+                            ...destWidget,
+                            components: [...destWidget.components, ...modifiedComponentsToMove]
+                        };
+
+                        // 5. Update new parent childIds in destination widget if specified
+                        if (newParentId) {
+                            newState.widgets[destWidgetId].components = newState.widgets[destWidgetId].components.map(c => {
+                                if (c.id === newParentId) {
+                                    return {
+                                        ...c,
+                                        childIds: [...c.childIds, componentId]
+                                    };
+                                }
+                                return c;
+                            });
                         }
-                    };
+                    }
+
+                    return newState;
                 });
 
-                eventBus.publish('hierarchy:changed', { widgetId });
+                // Generate events based on whether this is a cross-widget move
+                const isCrossWidgetMove = destinationWidgetId && destinationWidgetId !== sourceWidgetId;
+
+                if (isCrossWidgetMove) {
+                    // Notify about cross-widget movement
+                    eventBus.publish('component:moved', {
+                        sourceWidgetId,
+                        destinationWidgetId,
+                        componentId,
+                        parentId: newParentId
+                    });
+
+                    // Notify about hierarchy changes in both widgets
+                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
+                    eventBus.publish('hierarchy:changed', { widgetId: destinationWidgetId });
+                } else {
+                    // Notify about same-widget movement
+                    eventBus.publish('component:moved', {
+                        widgetId: sourceWidgetId,
+                        componentId,
+                        parentId: newParentId
+                    });
+
+                    // Notify about hierarchy change
+                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
+                }
             },
 
             /**
@@ -902,7 +1012,7 @@ export const useWidgetStore = create<WidgetStore>()(
                         id: widgetId,
                         type: 'Widget',
                         label: widget.label || 'Widget',
-                        icon: 'WidgetIcon',
+                        icon: WidgetIcon,
                         canDrop: true, // Widget can accept top-level components
                         canDrag: false, // Widget itself can't be dragged in the hierarchy
                         children: rootNodes

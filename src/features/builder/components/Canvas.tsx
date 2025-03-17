@@ -94,7 +94,7 @@ export const Canvas = memo(function Canvas() {
      * Handle background canvas click to deselect all
      */
     const handleCanvasClick = useCallback(
-        (e: React.MouseEvent) => {
+        (_e: React.MouseEvent) => {
             selectionState.deselectAll();
             eventBus.publish("component:deselected", {});
         },

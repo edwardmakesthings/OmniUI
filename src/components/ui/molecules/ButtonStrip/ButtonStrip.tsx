@@ -3,12 +3,11 @@ import { cn } from "@/lib/utils";
 import { IconButton, IconButtonProps } from "../../atoms/IconButton";
 import { PushButton, PushButtonProps } from "../../atoms/PushButton";
 import { IconProps } from "@/lib/icons/types";
-import { EntityId } from "@/core/types/EntityTypes";
 
 export type ButtonType = "icon" | "push";
 
 export interface ButtonStripItem {
-    id: EntityId;
+    id: string; // EntityId not needed because it's for identifying elements of a component, not components
     type?: ButtonType;
     label?: ReactNode;
     icon?: ComponentType<IconProps> | ReactNode;

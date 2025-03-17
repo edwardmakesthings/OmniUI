@@ -1,6 +1,6 @@
 import React, { useCallback } from "react";
 import { EntityId } from "@/core/types/EntityTypes";
-import componentOps from "@/features/builder/services/ComponentOperations";
+import { builderService } from "@/store";
 
 interface DeleteButtonProps {
     componentId: EntityId;
@@ -54,7 +54,7 @@ export const DeleteButton: React.FC<DeleteButtonProps> = ({
             );
 
             // Use ComponentOperationsService for deletion
-            componentOps.deleteComponent(widgetId, componentId);
+            builderService.deleteComponent(widgetId, componentId);
         },
         [componentId, widgetId]
     );

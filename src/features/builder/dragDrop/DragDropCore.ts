@@ -28,6 +28,18 @@ export interface DropIndicator {
     element: HTMLElement | null;
 }
 
+export interface ComponentDragData {
+    id: EntityId;
+    widgetId: EntityId;
+    componentType?: string;
+    parentId?: EntityId;
+    instanceId?: EntityId;
+    definitionId?: EntityId;
+    position?: any;  // Use your Position type here
+    size?: any;      // Use your Size type here
+    [key: string]: any; // Allow for additional properties
+}
+
 // Drag and drop state
 interface DragDropState {
     registeredTargets: Set<string>;
@@ -183,7 +195,7 @@ export const useDragDrop = create<DragDropState>((set, get) => {
 /**
  * Hook to make an element draggable
  */
-export function useDraggable<T = any>(
+export function useDraggable<T extends ComponentDragData>(
     type: string,
     id: EntityId,
     data: T,
@@ -195,14 +207,19 @@ export function useDraggable<T = any>(
         } | HTMLElement;
         dragHandle?: string;
         disabled?: boolean;
+        crossWidgetEnabled?: boolean;
     }
 ) {
     const { startDrag, endDrag, isDragging, dragSource } = useDragDrop();
     const elementRef = useRef<HTMLElement>(null);
     const [dragging, setDragging] = useState(false);
+    const [isCrossWidgetDrag, setIsCrossWidgetDrag] = useState(false);
 
     // Check if this element is being dragged
     const isBeingDragged = dragging || (isDragging && dragSource?.id === id);
+
+    // Cross-widget option (enabled by default)
+    const crossWidgetEnabled = options?.crossWidgetEnabled !== false;
 
     // Handle drag start
     const handleDragStart = useCallback((e: DragEvent<HTMLElement>) => {
@@ -211,11 +228,21 @@ export function useDraggable<T = any>(
         console.log(`Drag start: ${type}/${id}`);
         e.stopPropagation();
 
-        // Set drag data
+        // Set drag data with enhanced information for cross-widget operations
         const dragData = JSON.stringify({
             type,
             id,
-            data
+            widgetId: data.widgetId, // Include source widget ID
+            parentId: data.parentId,  // Include parent information
+            data: {
+                ...data,
+                // Include additional data needed for cross-widget operations
+                componentType: data.componentType,
+                instanceId: data.instanceId,
+                definitionId: data.definitionId,
+                position: data.position,
+                size: data.size
+            }
         });
 
         e.dataTransfer.setData('application/json', dragData);
@@ -242,17 +269,48 @@ export function useDraggable<T = any>(
             element: elementRef.current || undefined
         });
 
+        // Add cross-widget specific behavior if enabled
+        if (crossWidgetEnabled) {
+            // Add class to body for global styling during drag
+            document.body.classList.add('cross-widget-drag-active');
+
+            // Mark the element being dragged
+            if (elementRef.current) {
+                elementRef.current.setAttribute('data-cross-widget-drag', 'true');
+
+                // Only add source-widget-id if it's a real widget (not a palette)
+                if (data.widgetId && data.widgetId as string !== 'palette') {
+                    elementRef.current.setAttribute('data-source-widget-id', data.widgetId.toString());
+                }
+            }
+
+            setIsCrossWidgetDrag(true);
+        }
+
         // Update local state
         setDragging(true);
 
         // Set cursor
         document.body.style.cursor = 'grabbing';
-    }, [id, type, data, options, startDrag]);
+    }, [id, type, data, options, startDrag, crossWidgetEnabled]);
 
     // Handle drag end
     const handleDragEnd = useCallback((e: DragEvent<HTMLElement>) => {
         console.log(`Drag end: ${type}/${id}`);
         e.stopPropagation();
+
+        // Cleanup cross-widget state if enabled
+        if (crossWidgetEnabled) {
+            // Remove CSS classes
+            document.body.classList.remove('cross-widget-drag-active');
+
+            if (elementRef.current) {
+                elementRef.current.removeAttribute('data-cross-widget-drag');
+                elementRef.current.removeAttribute('data-source-widget-id');
+            }
+
+            setIsCrossWidgetDrag(false);
+        }
 
         // End drag in the manager
         endDrag();
@@ -262,7 +320,7 @@ export function useDraggable<T = any>(
 
         // Reset cursor
         document.body.style.cursor = 'default';
-    }, [id, type, endDrag]);
+    }, [id, type, endDrag, crossWidgetEnabled]);
 
     // Prepare props for the draggable element
     const dragProps = {
@@ -272,12 +330,17 @@ export function useDraggable<T = any>(
         onDragEnd: handleDragEnd,
         'data-drag-id': id,
         'data-drag-type': type,
-        className: `${isBeingDragged ? 'dragging' : ''}`
+        // Only add source-widget-id for actual components (not palette items)
+        ...(data.widgetId && data.widgetId as string !== 'palette' ?
+            { 'data-source-widget-id': data.widgetId.toString() } : {}),
+        'data-cross-widget': crossWidgetEnabled ? 'true' : 'false',
+        className: `${isBeingDragged ? 'dragging' : ''} ${isCrossWidgetDrag ? 'cross-widget-draggable' : ''}`
     };
 
     return {
         dragProps,
         isDragging: isBeingDragged,
+        isCrossWidgetDrag,
         elementRef
     };
 }
@@ -513,7 +576,7 @@ export function useDroppable<T extends string = string>(
   * Hook that combines draggable and droppable functionality for elements
   * that can both be dragged and receive drops
   */
-export function useDragAndDrop<T = any, A extends string = string>(
+export function useDragAndDrop<T extends ComponentDragData = any, A extends string = string>(
     type: string,
     id: EntityId,
     dragData: T,

@@ -73,12 +73,6 @@
     justify-content: center !important;
 }
 
-.empty-container::after {
-    content: "Drop components here";
-    color: var(--color-font-dark-muted);
-    font-size: var(--text-sm);
-}
-
 /* Container styling for different component types */
 .container-component {
     min-height: 40px;
@@ -326,5 +320,66 @@
         opacity: 0.7;
         box-shadow: 0 0 5px rgba(59, 130, 246, 0.5),
             0 0 0 1px rgba(59, 130, 246, 0.3);
+    }
+}
+
+/* Styles for active cross-widget drag operations */
+.cross-widget-drag-active .widget-node {
+    transition: outline 0.2s ease, background-color 0.2s ease;
+}
+
+/* Style for widget that can receive components during a cross-widget drag */
+.cross-widget-drag-active .widget-node:not([data-edit-mode="false"]) {
+    outline: 2px dashed rgba(59, 130, 246, 0.3);
+    outline-offset: 4px;
+}
+
+/* Style for widget being hovered during cross-widget drag */
+.cross-widget-drag-active .widget-node:not([data-edit-mode="false"]):hover {
+    outline: 2px dashed rgba(59, 130, 246, 0.7);
+    background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* Style for the component currently being dragged */
+[data-cross-widget-drag="true"] {
+    opacity: 0.7;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6);
+    position: relative;
+    z-index: 999 !important;
+}
+
+/* Style for drop target indicators during cross-widget operations */
+.cross-widget-drop-indicator {
+    background-color: rgba(59, 130, 246, 0.2);
+    border: 2px dashed #3b82f6;
+    border-radius: 4px;
+    position: absolute;
+    pointer-events: none;
+    animation: pulse 1.5s infinite;
+}
+
+/* Special indicator for dropping between widgets */
+.widget-drop-separator {
+    height: 4px;
+    background-color: #3b82f6;
+    margin: 8px 0;
+    border-radius: 2px;
+    transition: height 0.2s ease;
+}
+
+.widget-drop-separator:hover {
+    height: 8px;
+}
+
+/* Add opacity pulse animation for indicators */
+@keyframes pulse {
+    0% {
+        opacity: 0.4;
+    }
+    50% {
+        opacity: 0.8;
+    }
+    100% {
+        opacity: 0.4;
     }
 }

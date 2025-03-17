@@ -14,7 +14,7 @@ export const inputBehavior: BehaviorDefinition<InputState> = {
         isDirty: false,
         isValid: true
     },
-    handleStateChange: (currentState: InputState, event: string, data?: any) => {
+    handleStateChange: (_currentState: InputState, event: string, data?: any) => {
         switch (event) {
             case 'focus':
                 return { isFocused: true };
@@ -32,7 +32,7 @@ export const inputBehavior: BehaviorDefinition<InputState> = {
                 return {};
         }
     },
-    validate: (props: any) => {
+    validate: (_props: any) => {
         // Add validation logic if needed
         return true;
     }

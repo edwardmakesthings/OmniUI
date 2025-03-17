@@ -10,6 +10,7 @@ import {
 import { useUIStore } from "@/store/uiStore";
 import {
     useWidgetStore,
+    Widget,
     WidgetComponent,
 } from "@/features/builder/stores/widgetStore";
 import { EntityId } from "@/core/types/EntityTypes";
@@ -33,7 +34,13 @@ import WidgetDropOverlay from "./WidgetDropOverlay";
  *
  * @path src/features/builder/components/WidgetNode.tsx
  */
-export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
+export const WidgetNode = memo(function WidgetNode({
+    data,
+    selected = false,
+}: {
+    data: Widget;
+    selected?: boolean;
+}) {
     // Access to stores
     const widgetStore = useWidgetStore();
     const selectionState = useUIStore();
@@ -50,7 +57,7 @@ export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
     const autoResizeEnabledRef = useRef(true);
 
     // State for tracking drop completion
-    const [dropRefresh, setDropRefresh] = useState(0);
+    const [_dropRefresh, setDropRefresh] = useState(0);
 
     // Get selected component from selection state
     const selectedComponentId = useMemo(
@@ -515,7 +522,15 @@ export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
                 clearTimeout(resizeTimeoutRef.current);
             }
         };
-    }, [data.isEditMode, data.id, data.size.width.value, data.size.height.value, forceRender, rootComponents.length, widgetStore]);
+    }, [
+        data.isEditMode,
+        data.id,
+        data.size.width.value,
+        data.size.height.value,
+        forceRender,
+        rootComponents.length,
+        widgetStore,
+    ]);
 
     // Set active widget when selected
     useEffect(() => {
@@ -543,6 +558,89 @@ export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
         }
     }, [selected, data.id, selectionState]);
 
+    // Add a special handler for cross-widget dragging states
+    useEffect(() => {
+        const handleDragStart = (e: Event) => {
+            const dragEvent = e as DragEvent;
+
+            try {
+                // Try to get drag data to check if it's a component
+                const dataString =
+                    dragEvent.dataTransfer?.getData("application/json");
+                if (!dataString) return;
+
+                const dragData = JSON.parse(dataString);
+
+                // Check if this is a component being dragged
+                if (dragData.type === "component") {
+                    // Get source widget ID
+                    const sourceWidgetId =
+                        dragData.widgetId || dragData.data?.widgetId;
+
+                    // If source widget is different from this widget, mark as cross-widget drag
+                    if (
+                        sourceWidgetId &&
+                        sourceWidgetId !== data.id &&
+                        sourceWidgetId !== "palette"
+                    ) {
+                        // Add special class to enable drop highlighting
+                        if (widgetRef.current) {
+                            widgetRef.current.setAttribute(
+                                "data-cross-widget-target",
+                                "true"
+                            );
+                        }
+
+                        // Enable edit mode temporarily if needed
+                        if (!data.isEditMode) {
+                            widgetRef.current?.setAttribute(
+                                "data-temp-edit-mode",
+                                "true"
+                            );
+                        }
+                    }
+                }
+            } catch (error) {
+                // Silently fail on parse errors
+            }
+        };
+
+        const handleDragEnd = () => {
+            // Clean up attributes
+            if (widgetRef.current) {
+                widgetRef.current.removeAttribute("data-cross-widget-target");
+
+                // Restore original edit mode if needed
+                if (widgetRef.current.hasAttribute("data-temp-edit-mode")) {
+                    widgetRef.current.removeAttribute("data-temp-edit-mode");
+                }
+            }
+        };
+
+        // Add event listeners to detect the start and end of drags
+        document.addEventListener("dragstart", handleDragStart);
+        document.addEventListener("dragend", handleDragEnd);
+
+        return () => {
+            document.removeEventListener("dragstart", handleDragStart);
+            document.removeEventListener("dragend", handleDragEnd);
+        };
+    }, [data.id, data.isEditMode]);
+
+    const widgetClassNames = cn(
+        "rounded shadow-lg widget-node",
+        selected ? "outline outline-accent-dark-bright" : "",
+        isOver ? "bg-accent-dark-neutral/20" : "",
+        data.isEditMode ? "widget-edit-mode" : "widget-view-mode",
+        // Add cross-widget drop target styling
+        widgetRef.current?.hasAttribute("data-cross-widget-target")
+            ? "cross-widget-drop-target"
+            : "",
+        widgetRef.current?.hasAttribute("data-temp-edit-mode")
+            ? "temp-edit-mode"
+            : ""
+    );
+
     return (
         <>
             {/* ReactFlow connection handles (hidden) */}
@@ -555,12 +653,7 @@ export const WidgetNode = memo(function WidgetNode({ data, selected = false }) {
             {/* Widget container */}
             <div
                 ref={widgetRef}
-                className={cn(
-                    "rounded shadow-lg widget-node",
-                    selected ? "outline outline-accent-dark-bright" : "",
-                    isOver ? "bg-accent-dark-neutral/20" : "",
-                    data.isEditMode ? "widget-edit-mode" : "widget-view-mode"
-                )}
+                className={widgetClassNames}
                 style={{
                     width: data.size.width.value,
                     height: data.size.height.value,

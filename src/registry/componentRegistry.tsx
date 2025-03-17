@@ -1,6 +1,6 @@
 import { ComponentInstance } from "@/core/base/ComponentInstance";
 import { EntityId } from "@/core/types/EntityTypes";
-import { ReactElement, ReactNode } from "react";
+import { ReactElement, ReactNode, MouseEvent as ReactMouseEvent } from "react";
 import { ComponentType } from "@/core/types/ComponentTypes";
 import { create } from "zustand";
 import { useComponentStore, useWidgetStore } from "@/store";
@@ -33,8 +33,8 @@ export interface ComponentRenderProps extends BaseRenderProps {
  * Extends the base props with additional options for hierarchy handling
  */
 export interface HierarchyRenderOptions extends BaseRenderProps {
-    onSelect?: (id: EntityId, e?: MouseEvent) => void;
-    onDelete?: (id: EntityId, e?: MouseEvent) => void;
+    onSelect?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
+    onDelete?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
     dragDropEnabled?: boolean;
 }
 
@@ -91,7 +91,7 @@ interface ComponentRegistryState {
         instanceId: EntityId,
         widgetId: EntityId,
         options: HierarchyRenderOptions,
-        selectedComponentId?: EntityId
+        selectedComponentId: EntityId | null
     ) => ReactElement | null;
 }
 
@@ -119,6 +119,7 @@ export const useComponentRegistry = create<ComponentRegistryState>(
 
         getRenderer: (type) => {
             const renderer = get().renderers[type];
+
             if (!renderer) {
                 return defaultRenderer;
             }
@@ -152,13 +153,14 @@ export const useComponentRegistry = create<ComponentRegistryState>(
             instanceId: EntityId,
             widgetId: EntityId,
             options: HierarchyRenderOptions,
-            selectedComponentId?: EntityId
+            selectedComponentId: EntityId | null
         ): ReactElement | null => {
+            const selectedId = selectedComponentId || null;
             return renderHierarchy(
                 instanceId,
                 widgetId,
                 options,
-                selectedComponentId,
+                selectedId,
                 get
             );
         },
@@ -173,7 +175,7 @@ function renderHierarchy(
     instanceId: EntityId,
     widgetId: EntityId,
     options: HierarchyRenderOptions,
-    selectedComponentId?: EntityId,
+    selectedComponentId: EntityId | null,
     getState?: () => ComponentRegistryState
 ): ReactElement | null {
     const {
@@ -277,26 +279,27 @@ function renderHierarchy(
                 dragDropEnabled={dragDropEnabled && isEditMode}
                 parentId={widgetComponent.parentId}
                 renderComponent={registry.renderComponent}
-            >
-                {renderedChildren.length > 0 && isContainer && (
-                    <div
-                        className={cn(
-                            "relative",
-                            isContainer
-                                ? instance.type === "Panel"
-                                    ? "panel-children-container"
-                                    : "scrollbox-children-container"
-                                : "",
-                            "flex flex-col gap-2 p-2 min-h-[50px] w-full"
-                        )}
-                        data-children-container="true"
-                        data-parent-id={widgetComponent.id}
-                        data-component-type={instance.type}
-                    >
-                        {renderedChildren}
-                    </div>
-                )}
-            </ComponentWithDragDrop>
+                children={
+                    renderedChildren.length > 0 && isContainer ? (
+                        <div
+                            className={cn(
+                                "relative",
+                                isContainer
+                                    ? instance.type === "Panel"
+                                        ? "panel-children-container"
+                                        : "scrollbox-children-container"
+                                    : "",
+                                "flex flex-col gap-2 p-2 min-h-[50px] w-full"
+                            )}
+                            data-children-container="true"
+                            data-parent-id={widgetComponent.id}
+                            data-component-type={instance.type}
+                        >
+                            {renderedChildren}
+                        </div>
+                    ) : null
+                }
+            />
         );
     } catch (error) {
         console.error(

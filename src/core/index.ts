@@ -74,5 +74,5 @@ export * from './types/EntityTypes';
 export * from './types/Geometry';
 export * from './types/Measurement';
 export * from './types/UI';
-export * from './base/StoreError';
+export * from './base';
 export * from '../features/builder/dragDrop/ComponentDragDrop';
