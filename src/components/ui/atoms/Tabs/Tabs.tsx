@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useState } from "react";
+import { AriaAttributes, ReactNode, useCallback, useState } from "react";
 import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
@@ -42,6 +42,7 @@ export interface TabsProps
     variant?: TabsVariant;
     defaultTab?: string;
     selectedTab?: string;
+    disabled?: boolean;
     onTabChange?: (tabId: string) => void;
 
     // Style overrides
@@ -75,20 +76,22 @@ const Tab = ({
         state,
         computedStyle,
     }: RenderElementProps) => {
-        const ariaAttributes: AriaAttributes = {};
+        const ariaAttributes: AriaAttributes & { role?: string } = {
+            role: "tab",
+            "aria-selected": state.isSelected,
+            "aria-disabled": state.isDisabled,
+            "aria-controls": panelId,
+        };
 
         return (
             <button
                 {...elementProps}
                 id={id}
                 type="button"
-                role="tab"
-                aria-selected={state.isSelected}
-                aria-controls={panelId}
-                aria-disabled={state.isDisabled}
-                className={computedStyle.tab}
+                className={cn(computedStyle.tab, className)}
                 onClick={onClick}
                 disabled={state.isDisabled}
+                {...ariaAttributes}
             >
                 {children}
             </button>
@@ -167,6 +170,7 @@ export const Tabs = ({
     variant = "default",
     defaultTab,
     selectedTab: controlledTab,
+    disabled: isDisabled,
     onTabChange,
 
     // Style
@@ -180,7 +184,7 @@ export const Tabs = ({
 }: TabsProps) => {
     // State for uncontrolled usage
     const [selectedTabState, setSelectedTabState] = useState(
-        defaultTab || (tabs[0]?.id ?? "")
+        defaultTab || (tabs.length > 0 ? tabs[0].id : "")
     );
 
     // Use controlled value if provided, otherwise use internal state
@@ -188,40 +192,49 @@ export const Tabs = ({
 
     const handleTabChange = useCallback(
         (tabId: string) => {
+            if (isDisabled) return; // Don't change tabs if disabled
+
             if (controlledTab === undefined) {
                 setSelectedTabState(tabId);
             }
             onTabChange?.(tabId);
         },
-        [controlledTab, onTabChange]
+        [controlledTab, onTabChange, isDisabled]
     );
 
     // Render function for the tab container
     const renderTabs = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA
         const componentId =
             (elementProps as any)?.["data-component-id"] || "tabs";
 
+        const ariaAttributes: AriaAttributes & { role?: string } = {
+            role: "tablist",
+            "aria-orientation": "horizontal",
+            "aria-disabled": isDisabled ? "true" : "false",
+        };
+
         return (
             <div
                 {...elementProps}
                 id={componentId}
                 className={computedStyle.root}
+                data-disabled={isDisabled ? "true" : "false"}
             >
                 {/* Tab List */}
                 <div
                     className={cn(computedStyle.list, listClassName)}
-                    role="tablist"
-                    aria-orientation="horizontal"
+                    {...ariaAttributes}
                 >
                     {tabs.map((tab) => {
                         const isSelected = selectedTab === tab.id;
                         const tabId = `${componentId}-tab-${tab.id}`;
                         const panelId = `${componentId}-panel-${tab.id}`;
+                        const tabDisabled = isDisabled || tab.disabled;
 
                         return (
                             <Tab
@@ -229,9 +242,9 @@ export const Tabs = ({
                                 id={tabId}
                                 panelId={panelId}
                                 selected={isSelected}
-                                disabled={tab.disabled}
+                                disabled={tabDisabled}
                                 onClick={() =>
-                                    !tab.disabled && handleTabChange(tab.id)
+                                    !tabDisabled && handleTabChange(tab.id)
                                 }
                                 variant={variant}
                                 className={tabClassName}

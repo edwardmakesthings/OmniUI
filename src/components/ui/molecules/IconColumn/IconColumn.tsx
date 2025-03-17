@@ -101,11 +101,11 @@ export const IconColumn: React.FC = () => {
             {/* Logo button at the top opening a modal */}
             <div className="border-b border-accent-dark-neutral">
                 <IconButton
-                    icon={<LogoIcon />}
+                    icon={<LogoIcon size={36} />}
                     tooltip="Project Menu"
                     variant="bright"
                     onClick={() => openModal("project")}
-                    iconSize={28}
+                    iconSize={40}
                 />
             </div>
 

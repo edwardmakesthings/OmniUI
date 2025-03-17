@@ -174,7 +174,7 @@ export const TreeItem = memo(
                         "after",
                         ...(item.canDrop ? ["inside" as DropPosition] : []),
                     ]}
-                    onDrop={(e, dragData, target) => {
+                    onDrop={(_e, dragData, target) => {
                         console.log("TreeItem onDrop:", {
                             draggedId: dragData.id,
                             target,

@@ -258,7 +258,7 @@ export const TreeView = ({
     // Render function for the tree
     const renderTree = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => (
         <div

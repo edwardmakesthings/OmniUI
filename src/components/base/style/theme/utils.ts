@@ -100,23 +100,23 @@ export function generateQtStyles(
     return qtStyles;
 }
 
-// Example of generating Tailwind classes from theme tokens
-export function generateTailwindClasses(
-    theme: Theme,
-    elementType: string
-): Record<string, string> {
-    // This would map theme tokens to appropriate Tailwind classes
-    // Could be based on a configuration file or mapping
-    return {};
-}
+// // Example of generating Tailwind classes from theme tokens
+// export function generateTailwindClasses(
+//     theme: Theme,
+//     elementType: string
+// ): Record<string, string> {
+//     // This would map theme tokens to appropriate Tailwind classes
+//     // Could be based on a configuration file or mapping
+//     return {};
+// }
 
-// Integration with the style system
-export function applyThemeToStyles<T extends string>(
-    theme: Theme,
-    styles: Record<T, string>,
-    elementType: string
-): Record<T, string> {
-    // This would apply theme overrides to the computed styles
-    // Could use either direct CSS variables or Tailwind classes
-    return styles;
-}
+// // Integration with the style system
+// export function applyThemeToStyles<T extends string>(
+//     theme: Theme,
+//     styles: Record<T, string>,
+//     elementType: string
+// ): Record<T, string> {
+//     // This would apply theme overrides to the computed styles
+//     // Could use either direct CSS variables or Tailwind classes
+//     return styles;
+// }

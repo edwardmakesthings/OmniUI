@@ -4,9 +4,13 @@
  * while supporting serialization to ISO strings for storage
  */
 export interface TrackingMetadata {
-    createdAt: Date;
-    updatedAt: Date;
-    version: number;
+    createdAt: Date;                // Data related to undo system
+    updatedAt: Date;                // Data related to undo system
+    version: number;                // Version number related to undo system
+    definitionVersion: string;      // Component definition version (e.g., "1.0.0")
+    compatibilityVersion: string;   // Minimum app version required
+    createdBy?: string;             // User ID for user-created components
+    isUserComponent?: boolean;      // Flag for user vs. system components
 }
 
 /**
@@ -16,6 +20,10 @@ export interface SerializedTrackingMetadata {
     createdAt: string;
     updatedAt: string;
     version: number;
+    definitionVersion: string;
+    compatibilityVersion: string;
+    createdBy?: string;
+    isUserComponent?: boolean;
 }
 
 /**
@@ -26,7 +34,11 @@ export const TrackingMetadataUtils = {
         return {
             createdAt: metadata.createdAt.toISOString(),
             updatedAt: metadata.updatedAt.toISOString(),
-            version: metadata.version
+            version: metadata.version,
+            definitionVersion: metadata.definitionVersion,
+            compatibilityVersion: metadata.compatibilityVersion,
+            createdBy: metadata.createdBy,
+            isUserComponent: metadata.isUserComponent
         };
     },
 
@@ -34,7 +46,11 @@ export const TrackingMetadataUtils = {
         return {
             createdAt: new Date(serialized.createdAt),
             updatedAt: new Date(serialized.updatedAt),
-            version: serialized.version
+            version: serialized.version,
+            definitionVersion: serialized.definitionVersion,
+            compatibilityVersion: serialized.compatibilityVersion,
+            createdBy: serialized.createdBy,
+            isUserComponent: serialized.isUserComponent
         };
     }
 };

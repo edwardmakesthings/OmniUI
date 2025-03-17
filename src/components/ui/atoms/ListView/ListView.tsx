@@ -121,7 +121,7 @@ export function ListView<T extends ListItemMetadata>({
     // Render function for the list view
     const renderListView = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA

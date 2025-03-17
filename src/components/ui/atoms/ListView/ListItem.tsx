@@ -88,7 +88,7 @@ export function ListItem<T extends ListItemMetadata>({
     // Render function for the list item
     const renderListItem = ({
         elementProps,
-        state,
+        state: _state,
         computedStyle,
     }: RenderElementProps) => {
         // Get container ID for ARIA

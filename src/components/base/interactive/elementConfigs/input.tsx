@@ -39,7 +39,7 @@ export const inputConfig: ElementConfig<HTMLInputElement> = {
 
     defaultBehavior: {
         name: "input",
-        handleStateChange: (state, event) => {
+        handleStateChange: (_state, event) => {
             if (event === "focus") {
                 return { isFocused: true };
             }

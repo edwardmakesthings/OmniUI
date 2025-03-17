@@ -1,0 +1,485 @@
+/* Main component container */
+.component-container {
+    position: relative;
+    transition: all 0.15s ease;
+    border-radius: 3px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+/* Container highlighting when in edit mode */
+[data-edit-mode="true"] .component-container::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    pointer-events: none;
+    transition: all 0.15s ease;
+    z-index: 1;
+}
+
+/* Selected component highlight */
+.component-container.selected-component {
+    z-index: 5 !important;
+}
+
+.component-container.selected-component::before {
+    box-shadow: 0 0 0 2px #3b82f6, 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+/* Hover state */
+[data-edit-mode="true"] .component-container:hover::before {
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+/* Dragging state */
+.component-container.dragging-component {
+    opacity: 0.7 !important;
+    cursor: grabbing !important;
+    z-index: 1000 !important;
+    transform: scale(1.02) !important;
+}
+
+.component-container.dragging-component::before {
+    box-shadow: 0 0 0 2px #4e9bff, 0 0 8px rgba(78, 155, 255, 0.3);
+    border: 2px dashed #4e9bff !important;
+}
+
+/* Drop target indicators - General */
+.component-container.drop-target {
+    z-index: 10;
+}
+
+/* Individual drop position styling using data attributes */
+
+/* Before drop position */
+.component-container[data-drop-before="true"] .drop-indicator-before {
+    transform: scaleY(1);
+    opacity: 1;
+    height: 4px;
+    background-color: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+}
+
+/* After drop position */
+.component-container[data-drop-after="true"] .drop-indicator-after {
+    transform: scaleY(1);
+    opacity: 1;
+    height: 4px;
+    background-color: #3b82f6;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+    border-radius: 2px;
+}
+
+/* Inside drop position (containers only) */
+.component-container[data-drop-inside="true"] .drop-indicator-inside {
+    opacity: 1;
+    border: 2px dashed #3b82f6;
+    background-color: rgba(59, 130, 246, 0.1);
+    box-shadow: inset 0 0 8px rgba(59, 130, 246, 0.2);
+}
+
+/* Drop indicator base styles */
+.drop-indicator {
+    position: absolute;
+    pointer-events: none;
+    z-index: 100;
+    transition: all 0.2s ease;
+    opacity: 0;
+}
+
+.drop-indicator-before,
+.drop-indicator-after {
+    left: 0;
+    right: 0;
+    height: 0px;
+    transform: scaleY(0);
+    transition: transform 0.15s ease, height 0.15s ease, opacity 0.15s ease;
+}
+
+.drop-indicator-before {
+    top: -2px;
+}
+
+.drop-indicator-after {
+    bottom: -2px;
+}
+
+.drop-indicator-inside {
+    inset: 0;
+    border: 2px dashed transparent;
+    background-color: transparent;
+    transition: opacity 0.15s ease, border 0.15s ease,
+        background-color 0.15s ease;
+}
+
+/* Visual highlight styles for drop positions */
+.component-container.drop-position-before::before {
+    border-top: 2px solid #3b82f6 !important;
+}
+
+.component-container.drop-position-after::before {
+    border-bottom: 2px solid #3b82f6 !important;
+}
+
+.component-container.drop-position-inside::before {
+    border: 2px dashed #3b82f6 !important;
+    background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+/* Empty container styling */
+.component-container.empty-container {
+    min-height: 80px !important;
+    border: 2px dashed rgba(100, 100, 100, 0.3) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Delete button */
+.component-container .delete-button {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    background-color: rgba(30, 30, 30, 0.7);
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    z-index: 50;
+}
+
+.component-container:hover .delete-button {
+    opacity: 0.7;
+}
+
+.component-container .delete-button:hover {
+    opacity: 1;
+    background-color: #ef4444;
+    color: white;
+}
+
+/* Container component styling */
+[data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
+    min-height: 80px;
+    width: 100% !important;
+}
+
+/* Children containers */
+.panel-children-container,
+.scrollbox-children-container {
+    position: relative;
+    width: 100%;
+    min-height: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border-radius: 3px;
+}
+
+/* Nested components */
+[data-has-children="true"] [data-component-id] {
+    position: relative !important;
+    margin: 8px 0;
+}
+
+/* Component type specific styles */
+.component-type-panel,
+.component-type-scrollbox {
+    padding: 2px;
+}
+
+/* Grab cursor for draggable items in edit mode */
+[data-edit-mode="true"] .component-container {
+    cursor: grab;
+}
+
+/* Container highlight for easier drop target identification */
+.component-container.container-component:not(.empty-container)::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 6px;
+    background-color: #64a573;
+    border-radius: 0 0 0 3px;
+    opacity: 0.5;
+}
+
+/* For accessibility - add tab focus styles */
+.component-container:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Animation for drop indicators */
+@keyframes pulse {
+    0% {
+        opacity: 0.8;
+    }
+    50% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0.8;
+    }
+}
+
+.component-container[data-drop-before="true"] .drop-indicator-before,
+.component-container[data-drop-after="true"] .drop-indicator-after,
+.component-container[data-drop-inside="true"] .drop-indicator-inside {
+    animation: pulse 1.5s infinite;
+}
+
+/* Nested container drop zones */
+[data-is-nested-container="true"] {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: auto;
+    background-color: transparent;
+}
+
+/* Highlight for nested container drop zones */
+[data-is-nested-container="true"].drop-highlight {
+    background-color: rgba(59, 130, 246, 0.1);
+    border: 2px dashed #3b82f6;
+    border-radius: 4px;
+}
+
+/* Visual indicators for nested components */
+.component-container .component-container {
+    margin-left: 8px;
+    border-left: 2px solid rgba(100, 165, 115, 0.3);
+    padding-left: 8px;
+}
+
+/* Children container for Panel and ScrollBox */
+.panel-children-container,
+.scrollbox-children-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    min-height: 50px;
+    width: 100%;
+}
+
+/* Nested component styles */
+.component-container .component-container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Improve visibility of nested components */
+[data-is-container="true"] > .children-container {
+    border: 2px dashed rgba(100, 100, 100, 0.5);
+    border-radius: 4px;
+    margin-top: 5px;
+    padding: 8px;
+    min-height: 60px;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Adjust container sizing when it has children */
+.component-container.container-component[data-has-children="true"] {
+    min-height: auto !important; /* Override minimum height */
+}
+
+/* Empty container styling - only show when no children */
+.component-container.container-component[data-has-children="false"] {
+    min-height: 80px !important;
+    border: 2px dashed rgba(100, 100, 100, 0.3) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Selected component highlighting - use attribute selector for more specificity */
+[data-selected="true"] {
+    outline: 2px solid #3b82f6 !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3) !important;
+    z-index: 15 !important; /* Ensure selected component is above others */
+}
+
+/* Make sure nested selected components appear above their parents */
+[data-selected="true"] [data-selected="true"] {
+    z-index: 16 !important;
+}
+
+/* Improve delete button visibility */
+[data-selected="true"] .delete-button {
+    opacity: 1 !important;
+    z-index: 100 !important; /* Make sure it's above everything */
+}
+
+.selected-component {
+    outline: 3px solid #3b82f6 !important;
+    outline-offset: -1px;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5) !important;
+    position: relative;
+    z-index: 10 !important;
+}
+
+[data-selected="true"] {
+    background-color: rgba(59, 130, 246, 0.05) !important;
+}
+
+/* Debug outline for development */
+.debug-outline .component-container {
+    outline: 1px solid rgba(255, 0, 0, 0.2);
+}
+
+/* Make delete button more visible */
+.selected-component .delete-button {
+    opacity: 1 !important;
+    background-color: #ef4444 !important;
+    color: white !important;
+}
+
+/* Ensure all component containers can receive clicks */
+.component-container {
+    position: relative;
+    z-index: 1;
+}
+
+/* Make non-container components more easily selectable */
+.component-type-pushbutton,
+.component-type-input,
+.component-type-label,
+.component-type-dropdown {
+    position: relative;
+    padding: 4px;
+    margin: 2px;
+    border-radius: 3px;
+}
+
+/* Add a subtle highlight on hover to show clickable areas */
+[data-edit-mode="true"] .component-container:hover {
+    outline: 1px dashed rgba(59, 130, 246, 0.3);
+    cursor: pointer;
+}
+
+/* Add more specific styling for selection on non-container components */
+.component-type-pushbutton.selected-component,
+.component-type-input.selected-component,
+.component-type-label.selected-component,
+.component-type-dropdown.selected-component {
+    outline: 2px solid #3b82f6 !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3) !important;
+    z-index: 5 !important;
+}
+
+/* Make sure non-container selection is very visible */
+[data-selected="true"]:not([data-component-type="Panel"]):not(
+        [data-component-type="ScrollBox"]
+    ) {
+    background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+/* The non-container overlay should be styled to not interfere with the component */
+.non-container-overlay {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* ====== NEW WIDGET OVERLAY STYLES ====== */
+
+/* Widget overlay styles */
+.widget-drop-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none; /* By default, let events pass through */
+    transition: background-color 0.2s ease;
+    z-index: 1000; /* Above all components */
+}
+
+/* Active overlay capturing events */
+.widget-drop-overlay[data-drop-active="true"] {
+    pointer-events: auto; /* Now capturing events */
+    background-color: rgba(59, 130, 246, 0.05); /* Subtle highlight */
+    box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Drop validity feedback */
+.widget-drop-overlay[data-can-drop="true"] {
+    cursor: copy;
+}
+
+.widget-drop-overlay[data-can-drop="false"] {
+    cursor: no-drop;
+    background-color: rgba(239, 68, 68, 0.05); /* Red tint for invalid */
+    box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+/* Enhanced z-index management */
+.widget-node {
+    position: relative; /* Establish stacking context */
+}
+
+.widget-node .widget-content {
+    position: relative;
+    z-index: 1; /* Base level */
+}
+
+.widget-drop-overlay {
+    z-index: 1000; /* Above everything */
+}
+
+.drop-indicator {
+    z-index: 100; /* Above components */
+}
+
+.delete-button {
+    z-index: 500; /* Above indicators but below overlay */
+}
+
+.component-container {
+    z-index: 1; /* Base level */
+}
+
+/* Z-index stratification for nested components */
+.component-container .component-container {
+    z-index: 2;
+}
+.component-container .component-container .component-container {
+    z-index: 3;
+}
+.component-container
+    .component-container
+    .component-container
+    .component-container {
+    z-index: 4;
+}
+
+/* Debug info for development */
+.widget-drop-overlay-debug {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: monospace;
+    max-width: 200px;
+    z-index: 1001;
+}
+
+/* Make sure dropzone indicators work with overlay */
+.drop-zone-indicator {
+    pointer-events: none !important; /* Never capture events */
+}
