@@ -1,8 +1,20 @@
+/**
+ * @file components/ui/organisms/panels/LayoutPanel/LayoutPanel.tsx
+ * Component for displaying and manipulating the layout hierarchy.
+ */
+
 import { BasePanel } from "../BasePanel";
 import { usePanelConfig, useUIStore } from "@/store/uiStore";
-import { TreeView, TreeItem } from "@/components/ui/atoms/TreeView";
+import { TreeItemData, TreeView } from "@/components/ui/atoms/TreeView";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    ComponentType,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "react";
 import { EntityId } from "@/core/types/EntityTypes";
 import { WidgetIcon } from "@/components/ui/icons";
 import { componentIconMap } from "@/registry/componentRenderers";
@@ -10,6 +22,7 @@ import { PushButton } from "@/components/ui/atoms";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import eventBus from "@/core/eventBus/eventBus";
 import { builderService } from "@/store";
+import { IconProps } from "@/lib/icons/types";
 
 const LayoutPanel = () => {
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
@@ -25,6 +38,16 @@ const LayoutPanel = () => {
     // Track initial expansion
     const initialExpansionRef = useRef(false);
     const hierarchyDataRef = useRef<any[]>([]);
+    const lastWidgetUpdateRef = useRef<number>(0);
+
+    // This will capture the drag data to detect cross-widget operations
+    const dragDataRef = useRef<{
+        sourceId?: string;
+        targetId?: string;
+        dragInProgress: boolean;
+    }>({
+        dragInProgress: false,
+    });
 
     // Get selected component info from selection store
     const selectedTreeItem = useMemo(() => {
@@ -39,7 +62,7 @@ const LayoutPanel = () => {
     useEffect(() => {
         // Create a global reference to this component's functionality
         window._layoutHierarchyStore = {
-            selectItem: (id: EntityId) => {
+            selectItem: (id: EntityId | null) => {
                 // Handle widget-only selection
                 if (id && !id.includes("/")) {
                     widgetStore.setActiveWidget(id as EntityId);
@@ -69,7 +92,15 @@ const LayoutPanel = () => {
                 if (!selectedComponentId || !selectedWidgetId) return [];
                 return [`${selectedWidgetId}/${selectedComponentId}`];
             },
-            refreshView: () => setForceRender((prev) => prev + 1),
+            refreshView: (force = false) => {
+                if (force) {
+                    // Use force refresh for critical updates
+                    forceRefresh();
+                } else {
+                    // Use debounced refresh for regular updates
+                    debouncedRefresh();
+                }
+            },
         };
 
         return () => {
@@ -96,12 +127,96 @@ const LayoutPanel = () => {
         }
     }, [widgets]);
 
+    // Add effect to listen for tree view drag events
+    useEffect(() => {
+        const handleTreeDragStart = (e: CustomEvent) => {
+            if (e.detail && e.detail.sourceId) {
+                // Store drag source information
+                dragDataRef.current = {
+                    sourceId: e.detail.sourceId,
+                    dragInProgress: true,
+                };
+                console.log("Tree drag started:", e.detail.sourceId);
+            }
+        };
+
+        const handleTreeDragOver = (e: CustomEvent) => {
+            if (
+                e.detail &&
+                e.detail.targetId &&
+                dragDataRef.current.dragInProgress
+            ) {
+                // Update target information
+                dragDataRef.current.targetId = e.detail.targetId;
+            }
+        };
+
+        const handleTreeDragEnd = () => {
+            // Reset drag data after processing
+            setTimeout(() => {
+                dragDataRef.current = { dragInProgress: false };
+            }, 300); // Short delay to ensure handleTreeMove has access to the data
+        };
+
+        // Add event listeners - assumes TreeView dispatches these custom events
+        document.addEventListener(
+            "treeview-drag-start",
+            handleTreeDragStart as EventListener
+        );
+        document.addEventListener(
+            "treeview-drag-over",
+            handleTreeDragOver as EventListener
+        );
+        document.addEventListener(
+            "treeview-drag-end",
+            handleTreeDragEnd as EventListener
+        );
+
+        return () => {
+            document.removeEventListener(
+                "treeview-drag-start",
+                handleTreeDragStart as EventListener
+            );
+            document.removeEventListener(
+                "treeview-drag-over",
+                handleTreeDragOver as EventListener
+            );
+            document.removeEventListener(
+                "treeview-drag-end",
+                handleTreeDragEnd as EventListener
+            );
+        };
+    }, []);
+
+    // Debounced refresh function to prevent excessive re-renders
+    const debouncedRefresh = useCallback(() => {
+        const now = Date.now();
+        if (now - lastWidgetUpdateRef.current > 200) {
+            lastWidgetUpdateRef.current = now;
+            setForceRender((prev) => prev + 1);
+        }
+    }, []);
+
+    // Force refresh that bypasses debouncing for critical updates
+    const forceRefresh = useCallback(() => {
+        lastWidgetUpdateRef.current = Date.now();
+        // Clear hierarchy data to force a complete refresh
+        hierarchyDataRef.current = [];
+        setForceRender((prev) => prev + 1);
+    }, []);
+
     // Handle widget updates
     useEventSubscription(
         "widget:updated",
         (event) => {
             console.log("Layout panel received widget update:", event.data);
-            setForceRender((prev) => prev + 1);
+
+            // Use force refresh for hierarchy updates
+            if (event.data?.action === "hierarchy-updated") {
+                forceRefresh();
+            } else {
+                debouncedRefresh();
+            }
 
             // Auto-expand the widget that was updated
             if (event.data?.widgetId) {
@@ -114,14 +229,15 @@ const LayoutPanel = () => {
                 });
             }
         },
-        []
+        [debouncedRefresh, forceRefresh]
     );
 
     // Handle component addition
     useEventSubscription(
         "component:added",
         (event) => {
-            setForceRender((prev) => prev + 1);
+            // Component additions should trigger a more aggressive refresh
+            forceRefresh();
 
             // Auto-expand the parent widget and parent component if applicable
             if (event.data?.widgetId) {
@@ -147,75 +263,169 @@ const LayoutPanel = () => {
                 });
             }
         },
-        []
+        [forceRefresh]
     );
 
     // Handle component deletion
     useEventSubscription(
         "component:deleted",
         () => {
-            setForceRender((prev) => prev + 1);
+            console.log("Layout panel received component delete event");
+            // Component deletions should also trigger a full refresh
+            forceRefresh();
         },
-        []
+        [forceRefresh]
     );
 
     // Handle component updates
     useEventSubscription(
         "component:updated",
         () => {
-            setForceRender((prev) => prev + 1);
+            console.log("Layout panel received component update event");
+            debouncedRefresh();
         },
-        []
+        [debouncedRefresh]
     );
 
     // Handle hierarchy changes
     useEventSubscription(
         "hierarchy:changed",
         () => {
-            setForceRender((prev) => prev + 1);
+            console.log("Layout panel received hierarchy change event");
+            // Hierarchy changes are critical and need a full refresh
+            forceRefresh();
         },
-        []
+        [forceRefresh]
     );
 
     // Handle component reordering
     useEventSubscription(
         "component:reordered",
         () => {
-            setForceRender((prev) => prev + 1);
+            console.log("Layout panel received component reorder event");
+            // Component reordering needs a full refresh
+            forceRefresh();
         },
-        []
+        [forceRefresh]
     );
 
     // Fetch all widget hierarchies asynchronously
     useEffect(() => {
         // Skip if there are no widgets
-        if (widgets.length === 0) return;
+        if (widgets.length === 0) {
+            // Clear hierarchy data when there are no widgets
+            hierarchyDataRef.current = [];
+            return;
+        }
+
+        // Skip repeated fetches too close together, unless hierarchy data is empty
+        const now = Date.now();
+        if (
+            now - lastWidgetUpdateRef.current < 100 &&
+            hierarchyDataRef.current.length > 0 &&
+            hierarchyDataRef.current.length === widgets.length
+        ) {
+            return;
+        }
+
+        lastWidgetUpdateRef.current = now;
+        console.log(
+            "Fetching hierarchies for widgets:",
+            widgets.map((w) => w.id).join(", ")
+        );
 
         const fetchAllHierarchies = async () => {
-            const hierarchies = await Promise.all(
-                widgets.map(async (widget) => {
-                    try {
-                        const hierarchy =
-                            await widgetStore.getComponentHierarchy(widget.id);
-                        return hierarchy[0] || null;
-                    } catch (error) {
-                        console.error(
-                            `Error fetching hierarchy for widget ${widget.id}:`,
-                            error
-                        );
-                        return null;
-                    }
-                })
-            );
+            try {
+                const hierarchies = await Promise.all(
+                    widgets.map(async (widget) => {
+                        try {
+                            const hierarchy =
+                                await widgetStore.getComponentHierarchy(
+                                    widget.id
+                                );
+                            return hierarchy[0] || null;
+                        } catch (error) {
+                            console.error(
+                                `Error fetching hierarchy for widget ${widget.id}:`,
+                                error
+                            );
+                            return null;
+                        }
+                    })
+                );
 
-            // Filter out null values and update state
-            const validHierarchies = hierarchies.filter((h) => h !== null);
-            hierarchyDataRef.current = validHierarchies;
-            setForceRender((prev) => prev + 1);
+                // Filter out null values and update state
+                const validHierarchies = hierarchies.filter((h) => h !== null);
+
+                // Only update if we have data or if we previously had data that needs clearing
+                if (
+                    validHierarchies.length > 0 ||
+                    hierarchyDataRef.current.length > 0
+                ) {
+                    console.log(
+                        `Updating hierarchy data: ${validHierarchies.length} hierarchies found`
+                    );
+                    hierarchyDataRef.current = validHierarchies;
+
+                    // Safely trigger re-render without causing infinite loops
+                    setForceRender((prev) => prev + 1);
+                }
+            } catch (error) {
+                console.error("Error fetching hierarchies:", error);
+            }
         };
 
         fetchAllHierarchies();
-    }, [widgets, widgetStore, forceRender]);
+
+        // REMOVED forceRender from dependency array to prevent infinite loops
+        // Added a listener for legacy DOM events that some components might still use
+        const handleHierarchyChanged = () => {
+            forceRefresh();
+        };
+
+        document.addEventListener(
+            "component-hierarchy-changed",
+            handleHierarchyChanged
+        );
+        return () => {
+            document.removeEventListener(
+                "component-hierarchy-changed",
+                handleHierarchyChanged
+            );
+        };
+    }, [widgets, widgetStore, forceRefresh]);
+
+    // Create a safe fallback icon component
+    const SafeWidgetIcon = useMemo(() => {
+        // Try to get icon from component map first
+        const IconFromMap = componentIconMap?.Widget as
+            | ComponentType<IconProps>
+            | undefined;
+
+        // If we have a valid component in the map, use it
+        if (IconFromMap && typeof IconFromMap === "function") {
+            return IconFromMap;
+        }
+
+        // If WidgetIcon is a valid component, use it
+        if (WidgetIcon && typeof WidgetIcon === "function") {
+            return WidgetIcon;
+        }
+
+        // Last resort fallback - create a simple box icon component
+        return (props: IconProps) => (
+            <div
+                style={{
+                    width: props.size || 16,
+                    height: props.size || 16,
+                    backgroundColor: "currentColor",
+                    borderRadius: 2,
+                    opacity: 0.5,
+                }}
+                {...props}
+            />
+        );
+    }, []);
 
     // Build tree data for widgets and their components
     const treeData = useMemo(() => {
@@ -224,20 +434,22 @@ const LayoutPanel = () => {
             return hierarchyDataRef.current;
         }
 
+        console.log(widgets);
+
         // Default fallback if hierarchy data isn't available yet
         return widgets.map((widget) => ({
             id: widget.id,
             label: widget.label || "Widget",
-            icon: componentIconMap.Widget || WidgetIcon,
+            icon: SafeWidgetIcon,
             children: [],
             canDrop: true,
             canDrag: false,
         }));
-    }, [widgets, forceRender]);
+    }, [widgets, forceRender, SafeWidgetIcon]);
 
     // Handle tree item movement - completely rewritten to use array-based ordering
     const handleTreeMove = useCallback(
-        async (items) => {
+        async (items: TreeItemData[]) => {
             if (isProcessingDrag || !items.length || !items[0].id) return;
 
             setIsProcessingDrag(true);
@@ -248,6 +460,7 @@ const LayoutPanel = () => {
                 const widget = widgetStore.getWidget(widgetId);
                 if (!widget) {
                     console.error("Widget not found:", widgetId);
+                    setIsProcessingDrag(false);
                     return;
                 }
 
@@ -261,7 +474,7 @@ const LayoutPanel = () => {
 
                 // Recursive function to process the tree structure
                 const processTreeItems = async (
-                    treeItems,
+                    treeItems: TreeItemData[],
                     containerId: EntityId = widgetId
                 ) => {
                     // Process root-level children if this is a widget
@@ -403,9 +616,6 @@ const LayoutPanel = () => {
 
                 console.log("Tree move processing complete");
 
-                // Force a refresh of the panel
-                setForceRender((prev) => prev + 1);
-
                 // Small delay before allowing new drags to ensure all updates are processed
                 setTimeout(() => {
                     setIsProcessingDrag(false);
@@ -464,7 +674,15 @@ const LayoutPanel = () => {
     const handleManualRefresh = useCallback(() => {
         // Clear the current hierarchy data to force refetch
         hierarchyDataRef.current = [];
+
+        // Reset update timestamp to force refresh
+        lastWidgetUpdateRef.current = 0;
+
+        // Trigger re-render
         setForceRender((prev) => prev + 1);
+
+        // Also dispatch an event to notify other parts of the app
+        eventBus.publish("layout:refreshed", { timestamp: Date.now() });
     }, []);
 
     return (

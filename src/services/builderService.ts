@@ -303,39 +303,94 @@ export const builderService = {
     },
 
     /**
-     * Move a component to a new parent within a widget
-     * @param widgetId Widget containing the component
+     * Move a component to a new parent within a widget or to another widget
+     * @param sourceWidgetId Widget containing the component
      * @param componentId Component to move
      * @param newParentId New parent ID or undefined for root level
+     * @param destinationWidgetId Optional destination widget if different from source
+     * @param copyInstanceData Whether to create copies of component instances when moving between widgets
      * @returns True if moved successfully
      */
     moveComponent(
-        widgetId: EntityId,
+        sourceWidgetId: EntityId,
         componentId: EntityId,
-        newParentId?: EntityId
+        newParentId?: EntityId,
+        destinationWidgetId?: EntityId,
+        copyInstanceData: boolean = true
     ): boolean {
         try {
-            // Find current parent for event notification
             const widgetStore = useWidgetStore.getState();
-            const component = widgetStore.findComponent(widgetId, componentId);
+            const componentStore = useComponentStore.getState();
+            const uiStore = useUIStore.getState();
 
+            // Find current parent for event notification
+            const component = widgetStore.findComponent(sourceWidgetId, componentId);
             if (!component) return false;
 
-            const oldParentId = component.parentId;
+            // const oldParentId = component.parentId;
+            const isCrossWidgetMove = destinationWidgetId && destinationWidgetId !== sourceWidgetId;
 
-            // Move the component
-            widgetStore.moveComponent(widgetId, componentId, newParentId);
+            // For cross-widget moves, we may need to handle component instances
+            if (isCrossWidgetMove && copyInstanceData) {
+                // Get all components being moved (including children)
+                const sourceWidget = widgetStore.getWidget(sourceWidgetId);
+                if (!sourceWidget) return false;
 
-            // Notify about movement
-            eventBus.publish("component:updated", {
+                // Helper function to get all descendant components
+                const getDescendants = (rootId: EntityId): WidgetComponent[] => {
+                    const result: WidgetComponent[] = [];
+                    const collectChildren = (parentId: EntityId) => {
+                        const children = sourceWidget.components.filter(c => c.parentId === parentId);
+                        result.push(...children);
+                        children.forEach(child => collectChildren(child.id));
+                    };
+                    collectChildren(rootId);
+                    return result;
+                };
+
+                // Get component and its descendants
+                const componentsToMove = [component, ...getDescendants(componentId)];
+
+                // For each component, create a new instance in the component store
+                componentsToMove.forEach(comp => {
+                    const originalInstance = componentStore.getInstance(comp.instanceId);
+                    if (originalInstance) {
+                        // Create a copy of the instance
+                        const newInstance = componentStore.createFromDefinition(
+                            comp.definitionId,
+                            originalInstance.overrides || {}
+                        );
+
+                        // Update the component reference to point to the new instance
+                        comp.instanceId = newInstance.id;
+                    }
+                });
+            }
+
+            // Move the component using the widgetStore function
+            widgetStore.moveComponent(
+                sourceWidgetId,
                 componentId,
-                widgetId,
-                parentId: newParentId,
-                oldParentId
-            });
+                newParentId,
+                destinationWidgetId
+            );
 
-            // Also notify about hierarchy change
-            eventBus.publish("hierarchy:changed", { widgetId });
+            // If this was the selected component, update selection state
+            if (uiStore.selectedComponentId === componentId) {
+                if (isCrossWidgetMove) {
+                    // If moved to another widget, select in the new widget
+                    if (destinationWidgetId) {
+                        uiStore.selectComponent(componentId, destinationWidgetId);
+                    }
+                } else {
+                    // Just update the selection to reflect new parent if needed
+                    uiStore.selectComponent(componentId, sourceWidgetId);
+                }
+            }
+
+            // Notify about movement in a single consistent way
+            // The widgetStore.moveComponent method already sends appropriate events
+            // based on whether it's a cross-widget move
 
             return true;
         } catch (error) {
@@ -451,7 +506,7 @@ export const builderService = {
                     return false;
                 }
 
-                const expectedIndex = position === 'before' ? targetIndex : targetIndex + 1;
+                // const expectedIndex = position === 'before' ? targetIndex : targetIndex + 1;
                 if (position === 'before' && componentIndex > targetIndex) {
                     console.warn(`[BUILDER] Component ${componentId} is not before ${targetId}`);
                 } else if (position === 'after' && componentIndex !== targetIndex + 1) {

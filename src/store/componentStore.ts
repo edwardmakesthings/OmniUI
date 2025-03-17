@@ -7,13 +7,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ComponentState } from './types';
 import { ComponentDefinition } from '@/core/base/ComponentDefinition';
-import { BindingConfig, ComponentInstance, ComponentInstanceState, ExternalBindingConfig } from '@/core/base/ComponentInstance';
+import { BindingConfig, ComponentInstance, ExternalBindingConfig } from '@/core/base/ComponentInstance';
 import { createEntityId, EntityId } from '@/core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
 import { ComponentType } from '@/core/types/ComponentTypes';
 import { nanoid } from 'nanoid';
 import { ComponentConfig } from '@/core/base/ComponentConfig';
-import { defaultState } from '@/components/base/interactive';
+import { BaseState, defaultState } from '@/components/base/interactive';
 import { useMemo } from 'react';
 
 /**
@@ -32,8 +32,8 @@ export interface ComponentStore extends ComponentState {
     getInstance: (id: EntityId) => ComponentInstance;
 
     // Instance state
-    getInstanceState: (id: EntityId) => ComponentInstanceState;
-    updateInstanceState: (id: EntityId, updates: Partial<ComponentInstanceState>) => void;
+    getInstanceState: (id: EntityId) => BaseState;
+    updateInstanceState: (id: EntityId, updates: Partial<BaseState>) => void;
 
     // Binding system
     registerInstanceBinding: (

@@ -35,7 +35,9 @@ export abstract class BaseDefinitionImpl implements BaseDefinition {
         this.metadata = {
             createdAt: new Date(),
             updatedAt: new Date(),
-            version: 1
+            version: 1,
+            definitionVersion: '1.0.0',
+            compatibilityVersion: '1.0.0'
         };
     }
 

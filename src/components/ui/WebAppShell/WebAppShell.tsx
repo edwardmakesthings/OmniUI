@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import {
     ComponentPanel,
     LayoutPanel,
-    PropertyEditorPanel,
+    // PropertyEditorPanel,
     ThemePanel,
 } from "@/components/ui/organisms/panels";
 import { IconColumn } from "../molecules/IconColumn";
@@ -10,7 +10,7 @@ import { ModalProvider } from "@/contexts/ModalContext";
 import ModalContainer from "@/components/ui/modals/ModalContainer";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Canvas } from "@/features/builder/components";
-import ContainerExamples from "@/components/examples/CombinedExamples";
+// import ContainerExamples from "@/components/examples/CombinedExamples";
 import { initializeCoreSystem } from "@/core";
 import { DevResetButton } from "@/store/utils";
 

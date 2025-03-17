@@ -313,7 +313,8 @@ export class DropZoneManager {
         x: number,
         y: number,
         isContainer: boolean,
-        availablePositions: DropPosition[] = [DropPosition.BEFORE, DropPosition.AFTER, DropPosition.INSIDE]
+        availablePositions: DropPosition[] = [DropPosition.BEFORE, DropPosition.AFTER, DropPosition.INSIDE],
+        horizontal?: boolean
     ): DropPosition {
         // If only one position is available, return it
         if (availablePositions.length === 1) {
@@ -330,22 +331,21 @@ export class DropZoneManager {
         const percentageX = relativeX / rect.width;
         const percentageY = relativeY / rect.height;
 
-        // Determine if the component is wider than it is tall
-        // const isWide = rect.width > rect.height * 1.5;
+        const percentUsed = horizontal ? percentageX : percentageY;
 
         // Define edge zones - 25% for more reliable edge detection
-        const edgeZoneY = rect.height * 0.25;
+        const edgeZone = horizontal ? rect.width * 0.25 : rect.height * 0.25;
 
         // Check for container-specific logic
         if (isContainer && availablePositions.includes(DropPosition.INSIDE)) {
             // For containers, use larger middle area (50%)
-            if (relativeY > edgeZoneY && relativeY < rect.height - edgeZoneY) {
+            if (relativeY > edgeZone && relativeY < rect.height - edgeZone) {
                 return DropPosition.INSIDE;
             }
         }
 
         // Use before/after based on vertical position
-        if (percentageY < 0.5 && availablePositions.includes(DropPosition.BEFORE)) {
+        if (percentUsed < 0.5 && availablePositions.includes(DropPosition.BEFORE)) {
             return DropPosition.BEFORE;
         } else if (availablePositions.includes(DropPosition.AFTER)) {
             return DropPosition.AFTER;

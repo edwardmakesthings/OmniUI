@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import * as Icons from "./index";
 
-const categories = {
+type CategoryKey =
+    | "UI"
+    | "Navigation"
+    | "Actions"
+    | "Panels"
+    | "Components"
+    | "ComponentsSimple"
+    | "Editor";
+
+const categories: Record<CategoryKey, string[]> = {
     UI: [
         "CaretDownIcon",
         "XIcon",
@@ -69,7 +78,7 @@ const IconGallery = ({ className }: { className?: string }) => {
     const getAllIconNames = () => {
         return Object.keys(Icons).filter(
             (name) =>
-                typeof Icons[name] === "function" &&
+                typeof Icons[name as keyof typeof Icons] === "function" &&
                 name.includes("Icon") &&
                 name !== "IconGallery"
         );
@@ -89,8 +98,8 @@ const IconGallery = ({ className }: { className?: string }) => {
             .includes(searchTerm.toLowerCase());
         const matchesCategory =
             selectedCategory === "All" ||
-            (categories[selectedCategory] &&
-                categories[selectedCategory].includes(iconName));
+            (categories[selectedCategory as CategoryKey] &&
+                categories[selectedCategory as CategoryKey].includes(iconName));
         return matchesSearch && matchesCategory;
     });
 
@@ -102,7 +111,7 @@ const IconGallery = ({ className }: { className?: string }) => {
             };
         }
 
-        const grouped = { Uncategorized: [] };
+        const grouped: Record<string, string[]> = { Uncategorized: [] };
 
         for (const iconName of filteredIcons) {
             let categorized = false;
@@ -170,10 +179,14 @@ const IconGallery = ({ className }: { className?: string }) => {
                     </div>
 
                     <div className="flex-1 min-w-32">
-                        <label className="block text-xs font-medium mb-1">
+                        <label
+                            htmlFor="icon-size-select"
+                            className="block text-xs font-medium mb-1"
+                        >
                             Icon Size
                         </label>
                         <select
+                            id="icon-size-select"
                             className={`w-full p-1 border rounded text-sm focus:outline-none focus:ring-2 ${borderColorBright} focus:ring-2`}
                             value={iconSize}
                             onChange={(e) =>
@@ -218,12 +231,15 @@ const IconGallery = ({ className }: { className?: string }) => {
                             </option>
                         </select>
                     </div>
-
                     <div className="flex-1 min-w-32">
-                        <label className="block text-xs font-medium mb-1">
+                        <label
+                            htmlFor="category-select"
+                            className="block text-xs font-medium mb-1"
+                        >
                             Category
                         </label>
                         <select
+                            id="category-select"
                             className={`w-full p-1 border rounded text-sm focus:outline-none focus:ring-2  ${borderColorBright} focus:ring-2`}
                             value={selectedCategory}
                             onChange={(e) =>
@@ -261,7 +277,8 @@ const IconGallery = ({ className }: { className?: string }) => {
                             </h2>
                             <div className="grid grid-cols-[repeat(auto-fit,minmax(100px,1fr))]">
                                 {icons.map((iconName) => {
-                                    const IconComponent = Icons[iconName];
+                                    const IconComponent =
+                                        Icons[iconName as keyof typeof Icons];
                                     return IconComponent ? (
                                         <div
                                             key={iconName}

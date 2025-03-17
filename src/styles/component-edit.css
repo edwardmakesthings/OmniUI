@@ -137,12 +137,6 @@
     justify-content: center !important;
 }
 
-.component-container.empty-container::after {
-    content: "Drop components here";
-    color: rgba(100, 100, 100, 0.7);
-    font-size: 14px;
-}
-
 /* Delete button */
 .component-container .delete-button {
     position: absolute;
@@ -283,20 +277,6 @@
     width: 100%;
 }
 
-/* Empty container styling for better drop targets */
-.container-component:empty::after {
-    content: "Drop components here";
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 80px;
-    color: rgba(100, 100, 100, 0.5);
-    font-size: 14px;
-    border: 2px dashed rgba(100, 100, 100, 0.3);
-    border-radius: 4px;
-    margin: 10px;
-}
-
 /* Nested component styles */
 .component-container .component-container {
     position: relative;
@@ -325,18 +305,6 @@
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-}
-
-/* Only show "Drop components here" text for empty containers */
-.component-container.container-component[data-has-children="false"]::after {
-    content: "Drop components here";
-    color: rgba(100, 100, 100, 0.7);
-    font-size: 14px;
-}
-
-/* Hide "Drop components here" text when container has children */
-.component-container.container-component[data-has-children="true"]::after {
-    content: none !important;
 }
 
 /* Selected component highlighting - use attribute selector for more specificity */

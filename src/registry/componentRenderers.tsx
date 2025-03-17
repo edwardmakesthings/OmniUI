@@ -295,7 +295,7 @@ export const ScrollBoxRenderer: ComponentRenderer = ({
             data-selected={isSelected ? "true" : "false"}
             data-instance-id={instance.id}
             style={defaultStyle}
-            className={`scrollbox-component relative ${
+            className={`scrollbox-component w-full relative ${
                 isSelected ? "selected-component" : ""
             }`}
             onClick={handleSelect}
@@ -538,13 +538,37 @@ export const TabsRenderer: ComponentRenderer = ({
 
     // Default tabs configuration
     const defaultTabs = [
-        { id: "tab1", label: "Tab 1", content: "Tab 1 content" },
-        { id: "tab2", label: "Tab 2", content: "Tab 2 content" },
+        {
+            id: "tab1",
+            label: "Tab 1",
+            content: "Tab 1 content",
+            disabled: false,
+        },
+        {
+            id: "tab2",
+            label: "Tab 2",
+            content: "Tab 2 content",
+            disabled: false,
+        },
     ];
 
     // Use a new path for tabs configuration
     const tabsPath = ["overrides", "content", "properties", "tabs", "value"];
-    const tabs = componentProperty.getValue(instance, tabsPath, defaultTabs);
+    const tabsConfig = componentProperty.getValue(
+        instance,
+        tabsPath,
+        defaultTabs
+    );
+
+    // Ensure tabs have the correct shape, handling ReactNode content
+    const tabs = useMemo(() => {
+        return tabsConfig.map((tab) => ({
+            id: String(tab.id),
+            label: tab.label,
+            content: tab.content,
+            disabled: Boolean(tab.disabled),
+        }));
+    }, [tabsConfig]);
 
     // Check if this tabs component has any children
     const hasChildren = Boolean(
@@ -559,38 +583,41 @@ export const TabsRenderer: ComponentRenderer = ({
         }
     };
 
+    // Determine if the entire tabs component should be disabled
+    const isDisabled = componentProperty.getBoolean(
+        instance,
+        ["overrides", "content", "properties", "disabled", "value"],
+        false
+    );
+
     // Map children to tabs if needed
     // Create a stable reference to the tab content
     const tabContent = useMemo(() => {
+        // If component is disabled, ensure all tabs are disabled
+        if (isDisabled) {
+            return tabs.map((tab) => ({
+                ...tab,
+                disabled: true,
+            }));
+        }
+
         // If no children, use the default content from the tabs configuration
         if (!hasChildren) {
-            return undefined;
+            return tabs;
         }
 
         // If children exist, we need to map them to tabs
-        // This implementation depends on your Tabs component API
-        if (Array.isArray(children)) {
-            // Option 1: Distribute children across available tabs
-            // Map each child to a tab based on index (cycling if needed)
-            const tabsWithChildren = tabs.map((tab, index) => ({
-                ...tab,
-                content: children[index % children.length] || tab.content,
-            }));
-            return tabsWithChildren;
-        }
+        const childrenArray = Array.isArray(children) ? children : [children];
 
-        // If there's just a single child, put it in the first tab
-        if (tabs.length > 0) {
-            const tabsWithChild = [...tabs];
-            tabsWithChild[0] = {
-                ...tabsWithChild[0],
-                content: children,
-            };
-            return tabsWithChild;
-        }
-
-        return undefined;
-    }, [tabs, children, hasChildren]);
+        // Distribute children across available tabs
+        return tabs.map((tab, index) => ({
+            ...tab,
+            content:
+                index < childrenArray.length
+                    ? childrenArray[index]
+                    : tab.content,
+        }));
+    }, [tabs, children, hasChildren, isDisabled]);
 
     return (
         <div
@@ -605,7 +632,7 @@ export const TabsRenderer: ComponentRenderer = ({
             <Tabs
                 variant={variant}
                 tabs={tabContent || tabs}
-                disabled={isEditMode} // Disable tab switching in edit mode
+                disabled={isEditMode || isDisabled} // Disable tab interaction in edit mode or if explicitly disabled
                 data-instance-id={instance.id}
             >
                 {/* Only render children here if your Tabs component expects children outside of the tabs prop */}

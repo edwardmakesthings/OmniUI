@@ -4,6 +4,7 @@ import { builderService } from "@/store";
 import eventBus from "@/core/eventBus/eventBus";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
 import { Position } from "@/core/types/Geometry";
+import useDragDrop from "./DragDropCore";
 
 /**
  * Result of a drop target detection operation
@@ -16,6 +17,7 @@ export interface DropTargetInfo {
     canDrop: boolean;
     isContainer: boolean;
     parentId?: EntityId;
+    sourceWidgetId?: EntityId
 }
 
 /**
@@ -44,10 +46,15 @@ export class WidgetOverlayManager {
         // Sort by depth - deepest first (most nested)
         components.sort((a, b) => b.depth - a.depth);
 
-        // console.log(`[FindTarget] Found ${components.length} components at position`);
-        // if (components.length > 0) {
-        //     console.log(`[FindTarget] Deepest component: ${components[0].id} (depth: ${components[0].depth})`);
-        // }
+        // Enhance logging for cross-widget operations
+        const dragSource = useDragDrop.getState().dragSource;
+        const isCrossWidgetDrag = dragSource?.data?.widgetId &&
+            dragSource.data.widgetId !== widgetId &&
+            dragSource.data.widgetId !== 'palette';
+
+        if (isCrossWidgetDrag) {
+            console.log(`Cross-widget drag detected from ${dragSource?.data?.widgetId} to ${widgetId}`);
+        }
 
         // If no components were found, return the widget itself as target
         if (components.length === 0) {
@@ -58,44 +65,74 @@ export class WidgetOverlayManager {
                 position: DropPosition.INSIDE,
                 element: null,
                 canDrop: true,
-                isContainer: true
+                isContainer: true,
+                sourceWidgetId: dragSource?.data?.widgetId
             };
         }
 
-        // Use the deepest (most nested) component first
-        const target = components[0];
-        const element = target.element as HTMLElement;
+        // We're only interested in components that can be containers
+        // Filter for container components first
+        const containerComponents = components.filter(component => {
+            const element = component.element as HTMLElement;
+            return element.getAttribute('data-is-container') === 'true';
+        });
 
-        // Check if this is a problematic target that shouldn't receive drops
-        const isInvalid = element.hasAttribute('data-no-drop') ||
-            element.classList.contains('non-droppable');
+        // If we have container components, use the deepest one
+        if (containerComponents.length > 0) {
+            const target = containerComponents[0]; // Already sorted by depth
+            const element = target.element as HTMLElement;
 
-        if (isInvalid) {
-            console.log(`[FindTarget] Target ${target.id} is invalid for dropping, trying parent`);
-            // Try the parent instead
-            if (components.length > 1) {
-                const parentTarget = components[1];
+            // Check if this is a problematic target that shouldn't receive drops
+            const isInvalid = element.hasAttribute('data-no-drop') ||
+                element.classList.contains('non-droppable');
+
+            if (isInvalid && containerComponents.length > 1) {
+                // Try the next container if this one is invalid
+                const nextTarget = containerComponents[1];
                 return this.determineDropTargetInfo(
                     widgetId,
-                    parentTarget.id,
-                    parentTarget.element as HTMLElement,
-                    x, y
+                    nextTarget.id,
+                    nextTarget.element as HTMLElement,
+                    x, y,
+                    dragSource?.data?.widgetId
                 );
             }
 
-            // If no valid parent, use the widget
-            return {
-                widgetId,
-                componentId: null,
-                position: DropPosition.INSIDE,
-                element: null,
-                canDrop: true,
-                isContainer: true
-            };
+            if (!isInvalid) {
+                // Use this container
+                return this.determineDropTargetInfo(
+                    widgetId,
+                    target.id,
+                    element,
+                    x, y,
+                    dragSource?.data?.widgetId
+                );
+            }
         }
 
-        // Process the target to determine drop position and other properties
-        return this.determineDropTargetInfo(widgetId, target.id, element, x, y);
+        // If no valid containers found, fall back to the deepest component for before/after positions
+        if (components.length > 0) {
+            const target = components[0];
+            const element = target.element as HTMLElement;
+            return this.determineDropTargetInfo(
+                widgetId,
+                target.id,
+                element,
+                x, y,
+                dragSource?.data?.widgetId
+            );
+        }
+
+        // Last resort - use the widget
+        return {
+            widgetId,
+            componentId: null,
+            position: DropPosition.INSIDE,
+            element: null,
+            canDrop: true,
+            isContainer: true,
+            sourceWidgetId: dragSource?.data?.widgetId
+        }
     }
 
     /**
@@ -107,7 +144,8 @@ export class WidgetOverlayManager {
         componentId: EntityId,
         element: HTMLElement,
         x: number,
-        y: number
+        y: number,
+        sourceWidgetId?: EntityId
     ): DropTargetInfo {
         // Determine if this is a container component
         const isContainer =
@@ -141,6 +179,7 @@ export class WidgetOverlayManager {
             canDrop: true, // We'll assume we can drop, validation happens at drop time
             isContainer,
             parentId,
+            sourceWidgetId
         };
     }
 
@@ -327,11 +366,19 @@ export class WidgetOverlayManager {
         if (!this.currentTarget) return false;
 
         const {
-            widgetId,
-            componentId,
+            widgetId: destinationWidgetId,
+            componentId: targetComponentId,
             position: dropPosition,
-            parentId,
+            parentId: targetParentId,
+            sourceWidgetId,
         } = this.currentTarget;
+
+        // Determine if this is a cross-widget operation
+        const isCrossWidgetDrop = sourceWidgetId && sourceWidgetId !== destinationWidgetId && sourceWidgetId !== 'palette';
+
+        if (isCrossWidgetDrop) {
+            console.log(`Processing cross-widget drop from ${sourceWidgetId} to ${destinationWidgetId}`);
+        }
 
         try {
             // Handle component definition drops (new components)
@@ -340,10 +387,10 @@ export class WidgetOverlayManager {
                 if (!definitionId) return false;
 
                 // Drop inside container
-                if (componentId && dropPosition === DropPosition.INSIDE) {
+                if (targetComponentId && dropPosition === DropPosition.INSIDE) {
                     const result = builderService.addChildComponent(
-                        widgetId,
-                        componentId,
+                        destinationWidgetId,
+                        targetComponentId,
                         definitionId,
                         position || {
                             x: { value: 10, unit: "px" },
@@ -354,21 +401,21 @@ export class WidgetOverlayManager {
                     if (result) {
                         eventBus.publish("component:added", {
                             componentId: result.id,
-                            widgetId,
-                            parentId: componentId,
+                            widgetId: destinationWidgetId,
+                            parentId: targetComponentId,
                         });
                         return true;
                     }
                 }
                 // Drop before/after component
                 else if (
-                    componentId &&
+                    targetComponentId &&
                     (dropPosition === DropPosition.BEFORE ||
                         dropPosition === DropPosition.AFTER)
                 ) {
                     // Add to widget first
                     const result = builderService.addComponentToWidget(
-                        widgetId,
+                        destinationWidgetId,
                         definitionId,
                         position || {
                             x: { value: 10, unit: "px" },
@@ -379,17 +426,17 @@ export class WidgetOverlayManager {
                     if (result) {
                         // Move to correct parent
                         builderService.moveComponent(
-                            widgetId,
+                            destinationWidgetId,
                             result.id,
-                            parentId
+                            targetParentId
                         );
 
                         // Reorder
                         builderService.reorderComponents(
-                            widgetId,
-                            parentId || widgetId,
+                            destinationWidgetId,
+                            targetParentId || destinationWidgetId,
                             result.id,
-                            componentId,
+                            targetComponentId,
                             dropPosition === DropPosition.BEFORE
                                 ? "before"
                                 : "after"
@@ -397,16 +444,16 @@ export class WidgetOverlayManager {
 
                         eventBus.publish("component:added", {
                             componentId: result.id,
-                            widgetId,
-                            parentId,
+                            widgetId: destinationWidgetId,
+                            parentId: targetParentId,
                         });
                         return true;
                     }
                 }
                 // Drop directly on widget
-                else if (!componentId) {
+                else if (!targetComponentId) {
                     const result = builderService.addComponentToWidget(
-                        widgetId,
+                        destinationWidgetId,
                         definitionId,
                         position || {
                             x: { value: 10, unit: "px" },
@@ -417,7 +464,7 @@ export class WidgetOverlayManager {
                     if (result) {
                         eventBus.publish("component:added", {
                             componentId: result.id,
-                            widgetId,
+                            widgetId: destinationWidgetId,
                         });
                         return true;
                     }
@@ -425,89 +472,154 @@ export class WidgetOverlayManager {
             }
             // Handle existing component drops (moving components)
             else if (dragType === "component") {
-                const sourceComponentId = dragData.id;
-                if (!sourceComponentId) return false;
+                const sourceComponentId = dragData.id || dragData.data?.id;
 
-                // Prevent dropping onto itself
-                if (sourceComponentId === componentId) return false;
+                // Use the source widget ID from the drag data, or from the current target
+                const actualSourceWidgetId =
+                    dragData.widgetId ||
+                    dragData.data?.widgetId ||
+                    sourceWidgetId;
 
-                // Check for circular reference
-                if (componentId && dropPosition === DropPosition.INSIDE) {
-                    if (
-                        this.wouldCreateCircularReference(
-                            widgetId,
-                            sourceComponentId,
-                            componentId
-                        )
-                    ) {
-                        console.warn(
-                            "Cannot create circular reference in component hierarchy"
-                        );
+                if (!sourceComponentId || !actualSourceWidgetId) {
+                    console.error("Missing source component or widget ID in drag data");
+                    return false;
+                }
+
+                // Skip palette items (they aren't actual components to move)
+                if (actualSourceWidgetId === 'palette') {
+                    console.warn("Cannot move palette items - they should be added as new components");
+                    return false;
+                }
+
+                // Log the cross-widget operation with full details
+                if (actualSourceWidgetId !== destinationWidgetId) {
+                    console.log(`Cross-widget component move:
+                    Component: ${sourceComponentId}
+                    From: ${actualSourceWidgetId}
+                    To: ${destinationWidgetId}
+                    Target: ${targetComponentId || "widget root"}
+                    Position: ${dropPosition || "inside"}
+                `);
+                }
+
+                // Prevent dropping onto itself (only in same widget)
+                if (actualSourceWidgetId === destinationWidgetId && sourceComponentId === targetComponentId) {
+                    return false;
+                }
+
+                // Check for circular reference (only in same widget)
+                if (actualSourceWidgetId === destinationWidgetId &&
+                    targetComponentId &&
+                    dropPosition === DropPosition.INSIDE) {
+
+                    if (this.wouldCreateCircularReference(
+                        destinationWidgetId,
+                        sourceComponentId,
+                        targetComponentId
+                    )) {
+                        console.warn("Cannot create circular reference in component hierarchy");
                         return false;
                     }
                 }
 
                 // Drop inside container
-                if (componentId && dropPosition === DropPosition.INSIDE) {
+                if (targetComponentId && dropPosition === DropPosition.INSIDE) {
                     const success = builderService.moveComponent(
-                        widgetId,
+                        actualSourceWidgetId,
                         sourceComponentId,
-                        componentId
+                        targetComponentId, // New parent ID
+                        destinationWidgetId // Destination widget if different
                     );
 
                     if (success) {
-                        eventBus.publish("component:updated", {
-                            componentId: sourceComponentId,
-                            widgetId,
-                            parentId: componentId,
-                        });
+                        if (actualSourceWidgetId !== destinationWidgetId) {
+                            // Cross-widget movement
+                            eventBus.publish("component:moved", {
+                                componentId: sourceComponentId,
+                                sourceWidgetId: actualSourceWidgetId,
+                                destinationWidgetId,
+                                newParentId: targetComponentId
+                            });
+                        } else {
+                            // Same-widget movement
+                            eventBus.publish("component:updated", {
+                                componentId: sourceComponentId,
+                                widgetId: destinationWidgetId,
+                                parentId: targetComponentId,
+                            });
+                        }
                         return true;
                     }
                 }
                 // Drop before/after component
                 else if (
-                    componentId &&
+                    targetComponentId &&
                     (dropPosition === DropPosition.BEFORE ||
                         dropPosition === DropPosition.AFTER)
                 ) {
-                    // Move to correct parent
-                    builderService.moveComponent(
-                        widgetId,
+                    // First move to the right parent (possibly in a different widget)
+                    const moveSuccess = builderService.moveComponent(
+                        actualSourceWidgetId,
                         sourceComponentId,
-                        parentId
+                        targetParentId, // Move to the target's parent
+                        destinationWidgetId // Destination widget if different
                     );
 
-                    // Reorder
-                    builderService.reorderComponents(
-                        widgetId,
-                        parentId || widgetId,
-                        sourceComponentId,
-                        componentId,
-                        dropPosition === DropPosition.BEFORE
-                            ? "before"
-                            : "after"
-                    );
+                    if (moveSuccess) {
+                        // Then reorder within the destination widget
+                        builderService.reorderComponents(
+                            destinationWidgetId,
+                            targetParentId || destinationWidgetId,
+                            sourceComponentId,
+                            targetComponentId,
+                            dropPosition === DropPosition.BEFORE
+                                ? "before"
+                                : "after"
+                        );
 
-                    eventBus.publish("component:updated", {
-                        componentId: sourceComponentId,
-                        widgetId,
-                        parentId,
-                    });
-                    return true;
+                        if (actualSourceWidgetId !== destinationWidgetId) {
+                            // Cross-widget movement
+                            eventBus.publish("component:moved", {
+                                componentId: sourceComponentId,
+                                sourceWidgetId: actualSourceWidgetId,
+                                destinationWidgetId,
+                                newParentId: targetParentId
+                            });
+                        } else {
+                            // Same-widget movement
+                            eventBus.publish("component:updated", {
+                                componentId: sourceComponentId,
+                                widgetId: destinationWidgetId,
+                                parentId: targetParentId,
+                            });
+                        }
+                        return true;
+                    }
                 }
                 // Drop directly on widget
-                else if (!componentId) {
+                else if (!targetComponentId) {
                     const success = builderService.moveComponent(
-                        widgetId,
+                        actualSourceWidgetId,
                         sourceComponentId,
-                        undefined // Root level
+                        undefined, // Move to root level
+                        destinationWidgetId // Destination widget if different
                     );
 
                     if (success) {
-                        eventBus.publish("component:updated", {
-                            componentId: sourceComponentId,
-                            widgetId,
-                        });
+                        if (actualSourceWidgetId !== destinationWidgetId) {
+                            // Cross-widget movement
+                            eventBus.publish("component:moved", {
+                                componentId: sourceComponentId,
+                                sourceWidgetId: actualSourceWidgetId,
+                                destinationWidgetId
+                            });
+                        } else {
+                            // Same-widget movement
+                            eventBus.publish("component:updated", {
+                                componentId: sourceComponentId,
+                                widgetId: destinationWidgetId,
+                            });
+                        }
                         return true;
                     }
                 }
@@ -526,7 +638,14 @@ export class WidgetOverlayManager {
             this.currentTarget = null;
 
             // Notify about hierarchy change
-            eventBus.publish("hierarchy:changed", { widgetId });
+            if (destinationWidgetId) {
+                eventBus.publish("hierarchy:changed", { widgetId: destinationWidgetId });
+            }
+
+            // Also notify source widget about hierarchy change for cross-widget moves
+            if (isCrossWidgetDrop && sourceWidgetId) {
+                eventBus.publish("hierarchy:changed", { widgetId: sourceWidgetId });
+            }
         }
     }
 

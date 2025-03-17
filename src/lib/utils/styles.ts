@@ -41,6 +41,11 @@ export function createComponentClasses({
         isSelected && 'selected-component',
         isDragging && 'dragging-component',
 
+        // Drop position modifiers
+        dropPosition === 'before' && 'drop-before',
+        dropPosition === 'after' && 'drop-after',
+        dropPosition === 'inside' && 'drop-inside',
+
         // Additional classes
         className
     );
