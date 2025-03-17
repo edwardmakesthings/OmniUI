@@ -42,6 +42,7 @@ export interface TabsProps
     variant?: TabsVariant;
     defaultTab?: string;
     selectedTab?: string;
+    disabled?: boolean;
     onTabChange?: (tabId: string) => void;
 
     // Style overrides
@@ -169,6 +170,7 @@ export const Tabs = ({
     variant = "default",
     defaultTab,
     selectedTab: controlledTab,
+    disabled: isDisabled,
     onTabChange,
 
     // Style
@@ -182,7 +184,7 @@ export const Tabs = ({
 }: TabsProps) => {
     // State for uncontrolled usage
     const [selectedTabState, setSelectedTabState] = useState(
-        defaultTab || (tabs[0]?.id ?? "")
+        defaultTab || (tabs.length > 0 ? tabs[0].id : "")
     );
 
     // Use controlled value if provided, otherwise use internal state
@@ -190,12 +192,14 @@ export const Tabs = ({
 
     const handleTabChange = useCallback(
         (tabId: string) => {
+            if (isDisabled) return; // Don't change tabs if disabled
+
             if (controlledTab === undefined) {
                 setSelectedTabState(tabId);
             }
             onTabChange?.(tabId);
         },
-        [controlledTab, onTabChange]
+        [controlledTab, onTabChange, isDisabled]
     );
 
     // Render function for the tab container
@@ -211,6 +215,7 @@ export const Tabs = ({
         const ariaAttributes: AriaAttributes & { role?: string } = {
             role: "tablist",
             "aria-orientation": "horizontal",
+            "aria-disabled": isDisabled ? "true" : "false",
         };
 
         return (
@@ -218,6 +223,7 @@ export const Tabs = ({
                 {...elementProps}
                 id={componentId}
                 className={computedStyle.root}
+                data-disabled={isDisabled ? "true" : "false"}
             >
                 {/* Tab List */}
                 <div
@@ -228,6 +234,7 @@ export const Tabs = ({
                         const isSelected = selectedTab === tab.id;
                         const tabId = `${componentId}-tab-${tab.id}`;
                         const panelId = `${componentId}-panel-${tab.id}`;
+                        const tabDisabled = isDisabled || tab.disabled;
 
                         return (
                             <Tab
@@ -235,9 +242,9 @@ export const Tabs = ({
                                 id={tabId}
                                 panelId={panelId}
                                 selected={isSelected}
-                                disabled={tab.disabled}
+                                disabled={tabDisabled}
                                 onClick={() =>
-                                    !tab.disabled && handleTabChange(tab.id)
+                                    !tabDisabled && handleTabChange(tab.id)
                                 }
                                 variant={variant}
                                 className={tabClassName}

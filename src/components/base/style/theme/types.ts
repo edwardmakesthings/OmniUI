@@ -20,12 +20,14 @@ export interface ColorToken {
 export interface SizeToken {
     type: 'size';
     value: string;      // CSS variable reference (var(--size-md))
+    unit: string;       // CSS variable reference (var(--size-unit))
 }
 
 // Spacing token for margins, padding, etc.
 export interface SpacingToken {
     type: 'spacing';
     value: string;      // CSS variable reference (var(--spacing-md))
+    unit: string;       // CSS variable reference (var(--spacing-unit))
 }
 
 // Font token for typography
@@ -33,6 +35,7 @@ export interface FontToken {
     type: 'font';
     family?: string;    // CSS variable reference (var(--font-sans))
     size?: string;      // CSS variable reference (var(--font-size-md))
+    unit?: string;      // CSS variable reference (var(--font-size-unit))
     weight?: string;    // CSS variable reference (var(--font-weight-bold))
     lineHeight?: string;// CSS variable reference (var(--line-height-normal))
 }
@@ -41,6 +44,7 @@ export interface FontToken {
 export interface BorderToken {
     type: 'border';
     width: string;      // CSS variable reference (var(--border-width-thin))
+    unit: string;       // CSS variable reference (var(--border-width-unit))
     style: string;      // CSS variable reference (var(--border-style-solid))
     color: string;      // CSS variable reference (var(--border-color-primary))
 }

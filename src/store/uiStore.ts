@@ -397,7 +397,7 @@ export const useUIStore = create<UIStoreState>()(
                 try {
                     if (componentId && widgetId) {
                         // Format: widgetId/componentId
-                        layoutHierarchy.selectItem(`${widgetId}/${componentId}`);
+                        layoutHierarchy.selectItem(`${widgetId}/${componentId}` as EntityId);
                     } else {
                         // Clear selection
                         layoutHierarchy.selectItem(null);
@@ -549,7 +549,7 @@ export function useGridSettings() {
 declare global {
     interface Window {
         _layoutHierarchyStore?: {
-            selectItem: (id: string | null) => void;
+            selectItem: (id: EntityId | null) => void;
             getSelectedItems: () => string[];
             refreshView: () => void;
         };

@@ -1,5 +1,4 @@
 import {
-    MouseEvent,
     useState,
     useCallback,
     useRef,
@@ -7,18 +6,26 @@ import {
     useMemo,
     Children,
     memo,
+    ReactNode,
+    MouseEvent as ReactMouseEvent,
 } from "react";
 import { EntityId } from "@/core/types/EntityTypes";
-import { useWidgetStore } from "@/features/builder/stores/widgetStore";
-import { cn } from "@/lib/utils";
-import { useDraggable } from "@/features/builder/dragDrop/DragDropCore";
+import {
+    useWidgetStore,
+    WidgetComponent,
+} from "@/features/builder/stores/widgetStore";
+import {
+    ComponentDragData,
+    useDraggable,
+} from "@/features/builder/dragDrop/DragDropCore";
 import useDragDropStyles from "@/hooks/useDragDropStyles";
 
-import DeleteButton from "@/features/builder/components/WidgetActionButtons/DeleteButton";
+// import DeleteButton from "@/features/builder/components/WidgetActionButtons/DeleteButton";
 import { builderService, useUIStore } from "@/store";
 import eventBus from "@/core/eventBus/eventBus";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import useComponentStyling from "@/hooks/useComponentStyling";
+import { ComponentInstance } from "@/core";
 
 /**
  * Props for component rendering with drag capabilities
@@ -26,10 +33,67 @@ import useComponentStyling from "@/hooks/useComponentStyling";
 export interface ComponentRenderOptions {
     isEditMode?: boolean;
     isSelected?: boolean;
-    onSelect?: (id: EntityId, e?: MouseEvent) => void;
-    onDelete?: (id: EntityId, e?: MouseEvent) => void;
+    onSelect?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
+    onDelete?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
     actionHandler?: (action: string, targetId?: EntityId) => void;
     dragDropEnabled?: boolean;
+}
+
+/**
+ * Props for the ComponentWithDragDrop component
+ */
+export interface ComponentWithDragDropProps {
+    /** The component instance */
+    instance: ComponentInstance;
+
+    /** The widget component reference */
+    widgetComponent: WidgetComponent;
+
+    /** The ID of the widget containing this component */
+    widgetId: EntityId;
+
+    /** Whether this component can contain other components */
+    isContainer: boolean;
+
+    /** Whether this component is currently selected */
+    isSelected?: boolean;
+
+    /** Whether edit mode is enabled */
+    isEditMode?: boolean;
+
+    /** Callback when the component is selected */
+    onSelect?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
+
+    /** Callback when the component is deleted */
+    onDelete?: (id: EntityId, e?: ReactMouseEvent<Element, MouseEvent>) => void;
+
+    /** Handler for component actions */
+    actionHandler?: (action: string, targetId?: EntityId) => void;
+
+    /** Whether drag and drop is enabled for this component */
+    dragDropEnabled?: boolean;
+
+    /** The ID of the parent component, if any */
+    parentId?: EntityId;
+
+    /** Function to render the actual component content */
+    renderComponent: (
+        instance: ComponentInstance,
+        props: {
+            widgetId: EntityId;
+            isEditMode?: boolean;
+            isSelected?: boolean;
+            children?: ReactNode;
+            onDelete?: (
+                id: EntityId,
+                e?: ReactMouseEvent<Element, MouseEvent>
+            ) => void;
+            actionHandler?: (action: string, targetId?: EntityId) => void;
+        }
+    ) => ReactNode;
+
+    /** Child components */
+    children?: ReactNode;
 }
 
 /**
@@ -52,7 +116,7 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
     parentId,
     renderComponent,
     children,
-}) {
+}: ComponentWithDragDropProps) {
     // Store access via refs to prevent unnecessary re-renders
     const widgetStoreRef = useRef(useWidgetStore.getState());
     const selectionState = useUIStore();
@@ -88,7 +152,7 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
      * Handle component selection with proper event propagation control
      */
     const handleSelect = useCallback(
-        (e: MouseEvent) => {
+        (e: ReactMouseEvent<Element, MouseEvent>) => {
             // Stop propagation to prevent parent components from also getting selected
             e.stopPropagation();
 
@@ -125,7 +189,7 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
      * Handle component deletion with proper cleanup
      */
     const handleDelete = useCallback(
-        (e?: MouseEvent) => {
+        (e?: ReactMouseEvent<Element, MouseEvent>) => {
             // Stop event propagation to prevent parent handlers from firing
             if (e) {
                 e.stopPropagation();
@@ -155,24 +219,41 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
     // Component data for drag operations
     const componentId = useMemo(() => widgetComponent.id, [widgetComponent.id]);
 
-    const sourceData = useMemo(
+    // Create properly typed data object
+    const dragData: ComponentDragData = useMemo(
         () => ({
             id: componentId,
             widgetId,
             componentType: instance.type,
             parentId,
-            type: "component", // Important for the overlay to identify
+            instanceId: instance.id,
+            definitionId: widgetComponent.definitionId,
+            position: widgetComponent.position,
+            size: widgetComponent.size,
+            type: "component",
+            // Any other properties you want to include
         }),
-        [componentId, widgetId, instance.type, parentId]
+        [
+            componentId,
+            widgetId,
+            instance.type,
+            instance.id,
+            parentId,
+            widgetComponent.definitionId,
+            widgetComponent.position,
+            widgetComponent.size,
+        ]
     );
 
     // Set up draggable with the central system
     const {
         dragProps,
         isDragging: isDragActive,
+        isCrossWidgetDrag: _isCrossWidgetDrag,
         elementRef,
-    } = useDraggable("component", componentId, sourceData, {
+    } = useDraggable("component", componentId, dragData, {
         disabled: !isDragEnabledRef.current,
+        crossWidgetEnabled: true, // Explicitly enable cross-widget dragging
     });
 
     // Update local dragging state
@@ -243,13 +324,6 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
         hasChildren: !!(children && Children.count(children) > 0),
     });
 
-    // Child container class based on component type
-    const childContainerClass = isContainer
-        ? instance.type === "Panel"
-            ? "panel-children-container"
-            : "scrollbox-children-container"
-        : "";
-
     // Render the component with drag functionality
     return (
         <div
@@ -280,6 +354,7 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
                         e.preventDefault();
                         handleDelete(e);
                     }}
+                    type="button"
                     // Stop all mouse events from propagating
                     onMouseDown={(e) => e.stopPropagation()}
                     onMouseUp={(e) => e.stopPropagation()}

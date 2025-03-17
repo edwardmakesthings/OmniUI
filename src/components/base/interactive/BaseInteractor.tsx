@@ -9,7 +9,8 @@ import {
     useInteractiveStyles,
     useInteractiveBindings,
 } from "./hooks";
-import { useTheme } from "@/contexts/ThemeContext";
+import { EntityId } from "@/core";
+// import { useTheme } from "@/contexts/ThemeContext";
 
 /**
  * Base interactive component that provides state management, event handling,
@@ -66,7 +67,7 @@ export const BaseInteractor = <T extends string = string>({
     ...props
 }: BaseInteractorProps<T>) => {
     // Get theme from context
-    const { currentTheme } = useTheme();
+    // const { currentTheme } = useTheme();
 
     // Create ref for the root element
     const internalRef = useRef<HTMLElement>(null);
@@ -74,7 +75,11 @@ export const BaseInteractor = <T extends string = string>({
     const [dropPosition, setDropPosition] = useState<DropPosition | null>(null);
 
     // UI Store integration for element selection
-    const selectComponent = useUIStore((state) => state.selectComponent);
+    const originalSelectComponent = useUIStore(
+        (state) => state.selectComponent
+    );
+    // Create adapter for selectComponent to match expected signature
+    const selectComponent = (id: EntityId) => originalSelectComponent(id, null);
 
     // Component Store integration for binding execution
     const executeInstanceBinding = useComponentStore(

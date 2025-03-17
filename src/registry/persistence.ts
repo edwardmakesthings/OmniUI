@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { useComponentStore } from '@/store/componentStore';
+import { ComponentDefinition } from '@/core';
+
 
 // API base configuration
 const api = axios.create({
@@ -31,7 +33,7 @@ export async function loadComponentsFromDatabase() {
         const components = response.data;
 
         // Register each component
-        components.forEach(component => {
+        components.forEach((component: ComponentDefinition) => {
             store.addDefinition(component);
         });
 
@@ -53,8 +55,8 @@ function initializeDefaultComponents() {
         console.warn('No components loaded from database, initializing defaults');
 
         // Import and register defaults
-        import('@/registry/defaultComponents').then(module => {
-            module.registerDefaultComponents();
+        import('@/registry').then(module => {
+            module.initializeComponentSystem();
         }).catch(err => {
             console.error('Failed to load default components', err);
         });

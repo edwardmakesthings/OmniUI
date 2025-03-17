@@ -1,5 +1,5 @@
 import { EditIcon } from "../../icons";
-import { DropdownButton, DropdownSelect } from "../Dropdown";
+import { DropdownButton } from "../Dropdown";
 
 const ProjectHeader = () => {
     const projectName = "Name of Project";

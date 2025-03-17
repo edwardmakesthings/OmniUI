@@ -1,5 +1,5 @@
 import { HTMLAttributes, ReactNode } from "react";
-import { ElementHandlers } from "@/components/base/interactive/types";
+import { ElementHandlers, ElementType } from "@/components/base/interactive/types";
 import { BaseInteractorProps, BaseState } from "@/components/base/interactive/types";
 import { StyleVariants } from "@/components/base/style/types";
 import { BehaviorDefinition } from "@/components/base/interactive/behaviors/types";
@@ -49,11 +49,6 @@ export interface ElementConfig<T extends HTMLElement> {
      */
     supportedBehaviors?: string[];
 }
-
-/**
- * All available element types that can be used with BaseInteractor
- */
-export type ElementType = 'button' | 'input' | 'div' | 'span';
 
 /**
  * Map of element types to their configurations

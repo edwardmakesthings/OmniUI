@@ -1,5 +1,18 @@
-import { useDraggable } from '../DragDropCore';
+import { ComponentDragData, useDraggable } from '../DragDropCore';
 import { EntityId } from '@/core/types/EntityTypes';
+
+/**
+ * Extended ComponentDragData for component definitions from palette
+ * This allows component definitions to be dragged without requiring a widgetId
+ */
+export interface ComponentDefinitionDragData extends Partial<ComponentDragData> {
+    id: EntityId;
+    definitionId: EntityId;
+    componentType: string;
+    label: string;
+    type: 'component-definition';
+    // widgetId is optional for component definitions from palette
+}
 
 /**
  * Hook for making component panels draggable from the component palette
@@ -19,6 +32,8 @@ export function useComponentPanelDrag(
         'component-definition',
         componentDefinitionId,
         {
+            id: componentDefinitionId, // Required by ComponentDragData
+            widgetId: 'palette' as EntityId,
             type: 'component-definition',
             definitionId: componentDefinitionId,
             componentType,
@@ -26,8 +41,11 @@ export function useComponentPanelDrag(
         }
     );
 
+    // Remove the data-source-widget-id attribute since it's not relevant for palette items
+    const { 'data-source-widget-id': _, ...cleanDragProps } = dragProps;
+
     return {
-        dragProps,
+        dragProps: cleanDragProps,
         isDragging,
         elementRef
     };
@@ -40,13 +58,15 @@ export function useComponentPanelDrag(
  * @param componentId The component ID
  * @param componentType The component type
  * @param isEditMode Whether the widget is in edit mode
+ * @param parentId Optional parent component ID
  * @returns Drag props and dragging state
  */
 export function useComponentWidgetDrag(
     widgetId: EntityId,
     componentId: EntityId,
     componentType: string,
-    isEditMode: boolean
+    isEditMode: boolean,
+    parentId?: EntityId
 ) {
     // Set up draggable with component instance data
     const { dragProps, isDragging, elementRef } = useDraggable(
@@ -54,12 +74,14 @@ export function useComponentWidgetDrag(
         componentId,
         {
             id: componentId,
-            widgetId,
+            widgetId, // Real widget ID for actual components
             componentType,
+            parentId, // Include parent ID for hierarchy drag operations
             type: 'component'
         },
         {
-            disabled: !isEditMode
+            disabled: !isEditMode,
+            crossWidgetEnabled: true // Enable cross-widget dragging
         }
     );
 

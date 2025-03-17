@@ -62,8 +62,15 @@ export const ComponentPaletteExample = ({ searchQuery = "" }) => {
         { id: "datetime", icon: CompPushButtonIcon, label: "Date/Time" },
     ];
 
+    // Define component type
+    type ComponentItem = {
+        id: string;
+        icon: React.ComponentType<any>;
+        label: string;
+    };
+
     // Filter function
-    const filterBySearch = (components) => {
+    const filterBySearch = (components: ComponentItem[]) => {
         if (!searchQuery) return components;
         return components.filter((comp) =>
             comp.label.toLowerCase().includes(searchQuery.toLowerCase())
@@ -215,7 +222,6 @@ export const ComponentPaletteWithTabs = () => {
 const PropertyRow = ({
     label,
     children,
-    tooltip,
     className,
 }: {
     label: string;
@@ -267,7 +273,10 @@ export const PropertyPanelExample = () => {
                         </PropertyRow>
 
                         <PropertyRow label="Input Type">
-                            <select className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1">
+                            <select
+                                className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1"
+                                aria-label="Input Type"
+                            >
                                 <option>Number</option>
                                 <option>Text</option>
                                 <option>Boolean</option>
@@ -275,7 +284,10 @@ export const PropertyPanelExample = () => {
                         </PropertyRow>
 
                         <PropertyRow label="Format">
-                            <select className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1">
+                            <select
+                                className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1"
+                                aria-label="Format"
+                            >
                                 <option>Value Box</option>
                                 <option>Slider</option>
                             </select>
@@ -327,6 +339,7 @@ export const PropertyPanelExample = () => {
                                 <textarea
                                     className="w-full h-20 bg-bg-dark-darker border border-accent-dark-neutral rounded p-1 text-sm"
                                     defaultValue="You can place a bunch of text in this box and it can then be used for docs, tooltips, or other purposes."
+                                    title="Description"
                                 />
                                 <div className="text-xs text-right text-font-dark-muted cursor-pointer hover:text-font-dark">
                                     Help
@@ -335,7 +348,10 @@ export const PropertyPanelExample = () => {
                         </PropertyRow>
 
                         <PropertyRow label="Unit Type">
-                            <select className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1">
+                            <select
+                                className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1"
+                                aria-label="Unit Type"
+                            >
                                 <option>Degrees °</option>
                                 <option>Pixels px</option>
                                 <option>Percentage %</option>
@@ -402,14 +418,27 @@ export const PropertyPanelExample = () => {
                         <PropertyRow label="Size">
                             <div className="flex flex-col gap-2">
                                 <div className="flex items-center justify-end">
-                                    <span className="text-xs text-font-dark-muted mr-1">
-                                        auto
-                                    </span>
-                                    <input type="checkbox" className="mr-2" />
+                                    <label
+                                        htmlFor="autoSizeCheckbox"
+                                        className="flex items-center"
+                                    >
+                                        <span className="text-xs text-font-dark-muted mr-1">
+                                            auto
+                                        </span>
+                                        <input
+                                            id="autoSizeCheckbox"
+                                            type="checkbox"
+                                            className="mr-2"
+                                            aria-label="Auto size"
+                                        />
+                                    </label>
                                     <span className="text-xs text-font-dark-muted mr-1">
                                         px
                                     </span>
-                                    <select className="bg-bg-dark-darker border border-accent-dark-neutral rounded text-xs p-0.5">
+                                    <select
+                                        className="bg-bg-dark-darker border border-accent-dark-neutral rounded text-xs p-0.5"
+                                        aria-label="Unit Type"
+                                    >
                                         <option>px</option>
                                         <option>%</option>
                                         <option>em</option>
@@ -431,7 +460,10 @@ export const PropertyPanelExample = () => {
                         </PropertyRow>
 
                         <PropertyRow label="Style">
-                            <select className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1">
+                            <select
+                                className="w-full bg-bg-dark-darker border border-accent-dark-neutral rounded p-1"
+                                aria-label="Style"
+                            >
                                 <option>Simple Panel</option>
                                 <option>Elevated Panel</option>
                                 <option>Custom</option>

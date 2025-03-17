@@ -12,7 +12,7 @@ import {
     CompPanelIcon,
     CompScrollBoxIcon,
     CompPushButtonIcon,
-    CompMenuDropdownIcon,
+    // CompMenuDropdownIcon,
 } from "@/components/ui/icons";
 import { useComponentPanelDrag } from "@/features/builder/dragDrop/hooks/useComponentDrag";
 
@@ -48,7 +48,7 @@ export default function ComponentThumbnail({
 
     return (
         <div
-            {...dragProps}
+            {...(dragProps as React.HTMLAttributes<HTMLDivElement>)}
             className={cn(
                 thumbnailStyles,
                 className,
