@@ -28,3 +28,4 @@ dist-ssr
 *.js.map
 
 *.PostMVP
+*storybook.log

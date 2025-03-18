@@ -104,6 +104,11 @@ body,
     --property-editor-icon-size: var(--icon-size-sm);
 }
 
+/* Storybook overrides */
+.storybook-root {
+    background: rgb(27, 28, 29);
+}
+
 /* Widget View Mode Styles */
 
 /* Base container styling */
