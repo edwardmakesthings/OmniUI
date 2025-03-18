@@ -4,7 +4,7 @@
  */
 
 import { BasePanel } from "../BasePanel";
-import { usePanelConfig, useUIStore } from "@/store/uiStore";
+import { usePanelConfig } from "@/store/uiStore";
 import { TreeItemData, TreeView } from "@/components/ui/atoms/TreeView";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
 import {
@@ -23,11 +23,17 @@ import { useEventSubscription } from "@/hooks/useEventBus";
 import eventBus from "@/core/eventBus/eventBus";
 import { builderService } from "@/store";
 import { IconProps } from "@/lib/icons/types";
+import { useComponentSelection } from "@/hooks/useComponentSelection";
 
 const LayoutPanel = () => {
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
     const widgetStore = useWidgetStore();
-    const selectionState = useUIStore();
+
+    // Use centralized selection hook
+    const selection = useComponentSelection({
+        syncWithLayoutPanel: false, // Prevent infinite syncing loops
+    });
+
     const widgets = widgetStore.getVisibleWidgets();
 
     // State for tracking expanded items in tree view
@@ -49,14 +55,14 @@ const LayoutPanel = () => {
         dragInProgress: false,
     });
 
-    // Get selected component info from selection store
+    // Get selected component info from selection hook
     const selectedTreeItem = useMemo(() => {
-        const { selectedComponentId, selectedWidgetId } = selectionState;
+        const { selectedComponentId, selectedWidgetId } = selection;
         if (!selectedComponentId || !selectedWidgetId) return null;
 
         // Format: widgetId/componentId
         return `${selectedWidgetId}/${selectedComponentId}`;
-    }, [selectionState.selectedComponentId, selectionState.selectedWidgetId]);
+    }, [selection.selectedComponentId, selection.selectedWidgetId]);
 
     // Make the layout hierarchy store globally available for cross-component access
     useEffect(() => {
@@ -65,10 +71,8 @@ const LayoutPanel = () => {
             selectItem: (id: EntityId | null) => {
                 // Handle widget-only selection
                 if (id && !id.includes("/")) {
-                    widgetStore.setActiveWidget(id as EntityId);
-                    selectionState.selectComponent(null, id as EntityId, {
-                        syncWithLayoutPanel: false,
-                    });
+                    // Use selection hook to select widget
+                    selection.selectWidget(id as EntityId);
                     return;
                 }
 
@@ -78,17 +82,14 @@ const LayoutPanel = () => {
                         EntityId,
                         EntityId
                     ];
-                    selectionState.selectComponent(componentId, widgetId, {
-                        syncWithLayoutPanel: false,
-                    });
+                    selection.select(componentId, widgetId);
                 } else {
                     // Handle deselection
-                    selectionState.deselectAll();
+                    selection.deselect();
                 }
             },
             getSelectedItems: () => {
-                const { selectedComponentId, selectedWidgetId } =
-                    selectionState;
+                const { selectedComponentId, selectedWidgetId } = selection;
                 if (!selectedComponentId || !selectedWidgetId) return [];
                 return [`${selectedWidgetId}/${selectedComponentId}`];
             },
@@ -106,7 +107,7 @@ const LayoutPanel = () => {
         return () => {
             delete window._layoutHierarchyStore;
         };
-    }, [selectionState, widgetStore]);
+    }, [selection]);
 
     // Mark this panel for targeting from events
     useEffect(() => {
@@ -376,23 +377,6 @@ const LayoutPanel = () => {
         };
 
         fetchAllHierarchies();
-
-        // REMOVED forceRender from dependency array to prevent infinite loops
-        // Added a listener for legacy DOM events that some components might still use
-        const handleHierarchyChanged = () => {
-            forceRefresh();
-        };
-
-        document.addEventListener(
-            "component-hierarchy-changed",
-            handleHierarchyChanged
-        );
-        return () => {
-            document.removeEventListener(
-                "component-hierarchy-changed",
-                handleHierarchyChanged
-            );
-        };
     }, [widgets, widgetStore, forceRefresh]);
 
     // Create a safe fallback icon component
@@ -600,20 +584,6 @@ const LayoutPanel = () => {
                     action: "hierarchy-updated",
                 });
 
-                // Add DOM event for legacy components that might not use eventBus
-                document.dispatchEvent(
-                    new CustomEvent("widget-updated", {
-                        detail: { widgetId, action: "hierarchy-updated" },
-                    })
-                );
-
-                // Force re-render of components
-                document.dispatchEvent(
-                    new CustomEvent("component-hierarchy-changed", {
-                        detail: { widgetId },
-                    })
-                );
-
                 console.log("Tree move processing complete");
 
                 // Small delay before allowing new drags to ensure all updates are processed
@@ -633,7 +603,7 @@ const LayoutPanel = () => {
         (ids: string[]) => {
             if (!ids.length) {
                 // Deselect all
-                selectionState.deselectAll();
+                selection.deselect();
                 return;
             }
 
@@ -647,28 +617,20 @@ const LayoutPanel = () => {
                     EntityId
                 ];
 
-                // Set the selection in the selection store
-                selectionState.selectComponent(componentId, widgetId, {
-                    syncWithLayoutPanel: false,
-                    openPropertyPanel: true,
-                });
+                // Use centralized selection hook
+                selection.select(componentId, widgetId);
             } else {
                 // Just a widget selected, no component
-                widgetStore.setActiveWidget(selectedId as EntityId);
-
-                // Clear component selection
-                selectionState.selectComponent(null, selectedId as EntityId, {
-                    syncWithLayoutPanel: false,
-                });
+                selection.selectWidget(selectedId as EntityId);
             }
         },
-        [selectionState, widgetStore]
+        [selection]
     );
 
     // Delete selected component
     const handleDeleteComponent = useCallback(() => {
-        selectionState.deleteSelectedComponent();
-    }, [selectionState]);
+        selection.deleteSelected();
+    }, [selection]);
 
     // Manual refresh button handler
     const handleManualRefresh = useCallback(() => {
@@ -705,7 +667,7 @@ const LayoutPanel = () => {
                             onClick={handleDeleteComponent}
                             variant="ghost"
                             className="text-xs"
-                            disabled={!selectionState.selectedComponentId}
+                            disabled={!selection.selectedComponentId}
                         >
                             Delete
                         </PushButton>

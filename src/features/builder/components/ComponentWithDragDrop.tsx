@@ -21,7 +21,7 @@ import {
 import useDragDropStyles from "@/hooks/useDragDropStyles";
 
 // import DeleteButton from "@/features/builder/components/WidgetActionButtons/DeleteButton";
-import { builderService, useUIStore } from "@/store";
+import { useComponentSelection } from "@/hooks/useComponentSelection";
 import eventBus from "@/core/eventBus/eventBus";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import useComponentStyling from "@/hooks/useComponentStyling";
@@ -119,7 +119,9 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
 }: ComponentWithDragDropProps) {
     // Store access via refs to prevent unnecessary re-renders
     const widgetStoreRef = useRef(useWidgetStore.getState());
-    const selectionState = useUIStore();
+
+    // Use our centralized selection hook
+    const selection = useComponentSelection();
 
     // Refs for component data to ensure stable identity
     const instanceRef = useRef(instance);
@@ -150,43 +152,30 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
 
     /**
      * Handle component selection with proper event propagation control
+     * Using the centralized selection hook
      */
     const handleSelect = useCallback(
         (e: ReactMouseEvent<Element, MouseEvent>) => {
             // Stop propagation to prevent parent components from also getting selected
             e.stopPropagation();
 
-            // Get component ID and check if different from current selection
+            // Get component ID
             const componentId = widgetComponentRef.current.id;
-            if (
-                componentId === selectionState.selectedComponentId &&
-                widgetId === selectionState.selectedWidgetId
-            ) {
-                return; // Already selected
-            }
 
-            // Use the selection state to handle selection
-            selectionState.selectComponent(componentId, widgetId, {
-                syncWithLayoutPanel: true,
-                openPropertyPanel: true,
-            });
+            // Use centralized selection hook
+            selection.select(componentId, widgetId, e);
 
             // Call the provided handler for backwards compatibility
             if (onSelect) {
                 onSelect(componentId, e);
             }
-
-            // Publish selection event
-            eventBus.publish("component:selected", {
-                componentId,
-                widgetId,
-            });
         },
-        [onSelect, widgetId, selectionState]
+        [onSelect, widgetId, selection]
     );
 
     /**
      * Handle component deletion with proper cleanup
+     * Using the centralized selection hook
      */
     const handleDelete = useCallback(
         (e?: ReactMouseEvent<Element, MouseEvent>) => {
@@ -198,22 +187,15 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
 
             const componentId = widgetComponentRef.current.id;
 
-            // Check if this component is selected
-            if (componentId === selectionState.selectedComponentId) {
-                selectionState.deselectAll();
+            // Use centralized delete handler
+            selection.deleteComponent(componentId, widgetId, e);
+
+            // Call the provided handler for backwards compatibility
+            if (onDelete) {
+                onDelete(componentId, e);
             }
-
-            // Use ComponentOperations service for deletion
-            builderService.deleteComponent(widgetId, componentId);
-
-            // Publish deletion event
-            eventBus.publish("component:deleted", {
-                componentId,
-                widgetId,
-                parentId,
-            });
         },
-        [widgetId, parentId, selectionState]
+        [widgetId, onDelete, selection]
     );
 
     // Component data for drag operations
@@ -384,21 +366,6 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
                     </span>
                 </div>
             )}
-
-            {/* Container for children - only render if this is a container AND has children */}
-            {/* {isContainer && children && Children.count(children) > 0 && (
-                <div
-                    className={cn(
-                        "relative children-container w-full",
-                        childContainerClass
-                    )}
-                    data-children-container="true"
-                    data-parent-id={widgetComponent.id}
-                    data-component-type={instance.type}
-                >
-                    {children}
-                </div>
-            )} */}
         </div>
     );
 });
@@ -428,6 +395,11 @@ export function useWidgetComponentChanges(
                     callbackRef.current();
                 }
             }),
+            eventBus.subscribe("hierarchy:changed", (event) => {
+                if (event.data?.widgetId === widgetId) {
+                    callbackRef.current();
+                }
+            }),
             eventBus.subscribe("component:added", (event) => {
                 if (event.data?.widgetId === widgetId) {
                     callbackRef.current();
@@ -443,39 +415,12 @@ export function useWidgetComponentChanges(
                     callbackRef.current();
                 }
             }),
-            eventBus.subscribe("hierarchy:changed", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
         ];
-
-        // Legacy DOM event handler (for backward compatibility)
-        const handleWidgetUpdate = (e: Event) => {
-            const customEvent = e as CustomEvent;
-            if (customEvent.detail?.widgetId === widgetId) {
-                callbackRef.current();
-            }
-        };
-
-        // Add legacy event listeners
-        document.addEventListener("widget-updated", handleWidgetUpdate);
-        document.addEventListener(
-            "component-hierarchy-changed",
-            handleWidgetUpdate
-        );
 
         // Clean up
         return () => {
             // Clean up eventBus subscriptions
             subscriptionIds.forEach((id) => eventBus.unsubscribe(id));
-
-            // Clean up legacy event listeners
-            document.removeEventListener("widget-updated", handleWidgetUpdate);
-            document.removeEventListener(
-                "component-hierarchy-changed",
-                handleWidgetUpdate
-            );
         };
     }, [widgetId]);
 }

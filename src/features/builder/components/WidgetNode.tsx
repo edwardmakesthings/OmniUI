@@ -1,13 +1,4 @@
-import {
-    useState,
-    useRef,
-    useEffect,
-    useCallback,
-    useMemo,
-    MouseEvent,
-    memo,
-} from "react";
-import { useUIStore } from "@/store/uiStore";
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from "react";
 import {
     useWidgetStore,
     Widget,
@@ -25,8 +16,8 @@ import { useEventSubscription } from "@/hooks/useEventBus";
 import { cn } from "@/lib/utils";
 import DropZoneIndicator from "./DropZoneIndicator";
 import { DropPosition } from "../dragDrop";
-import { builderService } from "@/store";
 import WidgetDropOverlay from "./WidgetDropOverlay";
+import { useComponentSelection } from "@/hooks/useComponentSelection";
 
 /**
  * Represents a widget node on the canvas
@@ -43,8 +34,13 @@ export const WidgetNode = memo(function WidgetNode({
 }) {
     // Access to stores
     const widgetStore = useWidgetStore();
-    const selectionState = useUIStore();
     const registry = useComponentRegistry.getState();
+
+    // Use the centralized selection hook instead of direct store access
+    const selection = useComponentSelection({
+        syncWithLayoutPanel: true,
+        openPropertyPanel: true,
+    });
 
     // Refs and state
     const [forceRender, setForceRender] = useState(0);
@@ -62,14 +58,10 @@ export const WidgetNode = memo(function WidgetNode({
     // Get selected component from selection state
     const selectedComponentId = useMemo(
         () =>
-            data.id === selectionState.selectedWidgetId
-                ? selectionState.selectedComponentId
+            data.id === selection.selectedWidgetId
+                ? selection.selectedComponentId
                 : null,
-        [
-            data.id,
-            selectionState.selectedComponentId,
-            selectionState.selectedWidgetId,
-        ]
+        [data.id, selection.selectedComponentId, selection.selectedWidgetId]
     );
 
     /**
@@ -85,103 +77,39 @@ export const WidgetNode = memo(function WidgetNode({
      */
     const handleComponentAdded = useCallback(
         (newComponentId: EntityId) => {
-            // Select the new component
-            selectionState.selectComponent(newComponentId, data.id, {
-                syncWithLayoutPanel: true,
-                openPropertyPanel: true,
-            });
+            // Use the centralized selection hook to select the new component
+            selection.select(newComponentId, data.id);
 
             // Force re-render
             refreshWidget();
-
-            // Publish event
-            eventBus.publish("component:added", {
-                componentId: newComponentId,
-                widgetId: data.id,
-            });
         },
-        [data.id, selectionState, refreshWidget]
-    );
-
-    /**
-     * Handle component selection
-     */
-    const handleComponentSelect = useCallback(
-        (componentId: EntityId, event?: MouseEvent) => {
-            if (event) {
-                event.stopPropagation();
-            }
-
-            // Skip if already selected to prevent unnecessary updates
-            if (
-                componentId === selectedComponentId &&
-                data.id === selectionState.selectedWidgetId
-            ) {
-                return;
-            }
-
-            // Use selection state
-            selectionState.selectComponent(componentId, data.id, {
-                syncWithLayoutPanel: true,
-                openPropertyPanel: true,
-            });
-
-            // Publish selection event
-            eventBus.publish("component:selected", {
-                componentId,
-                widgetId: data.id,
-            });
-        },
-        [selectedComponentId, data.id, selectionState]
+        [data.id, selection, refreshWidget]
     );
 
     /**
      * Handle widget background click to deselect components
+     * Using the centralized selection hook
      */
     const handleWidgetBackgroundClick = useCallback(
-        (e: MouseEvent) => {
-            if (e.target === e.currentTarget) {
-                selectionState.deselectAll();
-
-                // Set the widget as active, but with no selected component
-                widgetStore.setActiveWidget(data.id);
-
-                // Publish deselection event
-                eventBus.publish("component:deselected", {
-                    widgetId: data.id,
-                });
-            }
+        (e: React.MouseEvent) => {
+            // Use the centralized background click handler
+            selection.handleWidgetBackgroundClick(data.id, e);
         },
-        [data.id, selectionState, widgetStore]
+        [data.id, selection]
     );
 
     /**
-     * Handle component deletion
+     * Handle component deletion using the centralized hook
      */
     const handleDeleteComponent = useCallback(
-        (componentId: EntityId, e?: MouseEvent) => {
-            if (e) {
-                e.stopPropagation();
-            }
-
-            // Handle selection first
-            if (componentId === selectedComponentId) {
-                selectionState.deselectAll();
-            }
-
-            // Remove from widget
-            builderService.deleteComponent(data.id, componentId);
-
-            // Publish event
-            eventBus.publish("component:deleted", {
-                componentId,
-                widgetId: data.id,
-            });
+        (componentId: EntityId, e?: React.MouseEvent) => {
+            // Use the centralized delete handler
+            selection.deleteComponent(componentId, data.id, e);
 
             // Refresh the widget display
             refreshWidget();
         },
-        [data.id, selectedComponentId, selectionState, refreshWidget]
+        [data.id, selection, refreshWidget]
     );
 
     // Set up drop target for widget background
@@ -311,29 +239,6 @@ export const WidgetNode = memo(function WidgetNode({
         [data.id, refreshWidget]
     );
 
-    // Handle legacy DOM events in the same component
-    useEffect(() => {
-        const handleLegacyHierarchyChange = (e: Event) => {
-            const customEvent = e as CustomEvent;
-            if (customEvent.detail?.widgetId === data.id) {
-                console.log("Widget received legacy hierarchy change event");
-                refreshWidget();
-            }
-        };
-
-        document.addEventListener(
-            "component-hierarchy-changed",
-            handleLegacyHierarchyChange
-        );
-
-        return () => {
-            document.removeEventListener(
-                "component-hierarchy-changed",
-                handleLegacyHierarchyChange
-            );
-        };
-    }, [data.id, refreshWidget]);
-
     // Get root components to render - using array order for siblings rather than z-index
     const rootComponents = useMemo(
         () => {
@@ -351,8 +256,8 @@ export const WidgetNode = memo(function WidgetNode({
 
     // Check if a component is selected
     const isComponentSelected = useCallback(
-        (componentId: EntityId) => componentId === selectedComponentId,
-        [selectedComponentId]
+        (componentId: EntityId) => selection.isSelected(componentId),
+        [selection]
     );
 
     /**
@@ -379,7 +284,10 @@ export const WidgetNode = memo(function WidgetNode({
                                         isSelected: isComponentSelected(
                                             comp.id
                                         ),
-                                        onSelect: handleComponentSelect,
+                                        onSelect: (
+                                            id: EntityId,
+                                            e?: React.MouseEvent
+                                        ) => selection.select(id, data.id, e),
                                         onDelete: handleDeleteComponent,
                                         actionHandler: handleAction,
                                         dragDropEnabled: data.isEditMode,
@@ -403,7 +311,7 @@ export const WidgetNode = memo(function WidgetNode({
             data.id,
             data.isEditMode,
             handleWidgetBackgroundClick,
-            handleComponentSelect,
+            selection.select,
             handleDeleteComponent,
             handleAction,
             isComponentSelected,
@@ -535,28 +443,10 @@ export const WidgetNode = memo(function WidgetNode({
     // Set active widget when selected
     useEffect(() => {
         if (selected && data.id) {
-            const currentActiveWidget =
-                useWidgetStore.getState().activeWidgetId;
-
-            // Only set if different
-            if (currentActiveWidget !== data.id) {
-                widgetStore.setActiveWidget(data.id);
-
-                // If a component is already selected in this widget, ensure it stays selected
-                if (
-                    selectionState.selectedComponentId &&
-                    selectionState.selectedWidgetId !== data.id
-                ) {
-                    selectionState.selectComponent(null, data.id);
-                }
-
-                // Publish widget selection event
-                eventBus.publish("widget:selected", {
-                    widgetId: data.id,
-                });
-            }
+            // Use selection.selectWidget instead of direct store interaction
+            selection.selectWidget(data.id);
         }
-    }, [selected, data.id, selectionState]);
+    }, [selected, data.id, selection]);
 
     // Add a special handler for cross-widget dragging states
     useEffect(() => {

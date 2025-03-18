@@ -4,6 +4,7 @@ import { registerComponentRenderers } from '@/registry/componentRenderers';
 import { useWidgetStore } from '@/features/builder/stores/widgetStore';
 import { useComponentStore } from '@/store/componentStore';
 import { useUIStore } from '@/store/uiStore';
+import eventBus from './eventBus/eventBus';
 
 interface InitOptions {
     resetStores?: boolean;
@@ -46,23 +47,17 @@ export async function initializeCoreSystem(options: InitOptions = {}) {
 }
 
 /**
- * Create essential event listeners for cross-component communication
+ * Create essential event listeners for cross-component communication using eventBus
  */
 export function setupGlobalEventListeners() {
-    // Widget update event listener
-    window.addEventListener('widget-updated', (e: any) => {
-        // Notify any interested components about the widget update
-        const { widgetId } = e.detail;
+    // Subscribe to widget update events and propagate to hierarchy changed events
+    eventBus.subscribe('widget:updated', (event) => {
+        const { widgetId } = event.data;
 
-        // Find all panels that might need to know about this update
-        const panels = document.querySelectorAll('[data-panel-id]');
-        panels.forEach(panel => {
-            // Create a new event specific to each panel
-            const panelEvent = new CustomEvent('widget-hierarchy-changed', {
-                detail: { widgetId }
-            });
-            panel.dispatchEvent(panelEvent);
-        });
+        if (widgetId) {
+            // Publish a hierarchy changed event for this widget
+            eventBus.publish('hierarchy:changed', { widgetId });
+        }
     });
 }
 

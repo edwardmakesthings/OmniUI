@@ -15,6 +15,8 @@ export type EventType =
     | 'component:moved'
     | 'component:updated'
     | 'component:reordered'
+    | 'component:info'
+    | 'component:getInfo'
     | 'hierarchy:changed'
     | 'widget:created'
     | 'widget:updated'

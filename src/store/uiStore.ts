@@ -9,7 +9,6 @@ import { createEntityId, EntityId } from '@/core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
 import { MeasurementUtils } from '@/core/types/Measurement';
 import { ComponentsIcon, ConnectionsIcon, LayoutIcon, PropertyEditorIcon, ThemeIcon, WidgetsIcon } from '@/components/ui/icons';
-import eventBus from '@/core/eventBus/eventBus';
 
 // Default grid settings
 const DEFAULT_GRID_SETTINGS = {
@@ -112,7 +111,7 @@ const DEFAULT_SELECTION_STATE: SelectionState = {
 /**
  * Extended UI store interface that includes selection state and methods
  */
-interface UIStoreState extends UIState, SelectionState {
+export interface UIStoreState extends UIState, SelectionState {
     // Editor mode
     isEditMode: boolean;
     toggleEditMode: () => void;
@@ -124,23 +123,18 @@ interface UIStoreState extends UIState, SelectionState {
     // Grid settings
     updateGridSettings: (settings: Partial<UIState['gridSettings']>) => void;
 
-    // Component selection
+    // Selection state management
+    updateSelectionState: (state: Partial<SelectionState>) => void;
+
+    // Component selection - basic state operations only
     selectComponent: (
         componentId: EntityId | null,
         widgetId: EntityId | null,
         options?: { openPropertyPanel?: boolean, syncWithLayoutPanel?: boolean }
     ) => void;
-    selectInstanceComponent: (instanceId: EntityId | null) => void;
+
     deselectAll: () => void;
     isComponentSelected: (componentId: EntityId) => boolean;
-    deleteSelectedComponent: () => void;
-    syncWithLayoutPanel: (componentId: EntityId | null, widgetId: EntityId | null) => void;
-    getSelectedComponentInfo: () => {
-        componentId: EntityId | null,
-        widgetId: EntityId | null,
-        instanceId: EntityId | null,
-        type: string | null
-    };
 
     // Store reset
     resetState: (options?: { keepEditorState?: boolean }) => void;
@@ -149,8 +143,6 @@ interface UIStoreState extends UIState, SelectionState {
 /**
  * UI Store that manages application UI state including panel configurations,
  * selection state, and editor preferences.
- *
- * This store combines UI configuration with selection state management.
  */
 export const useUIStore = create<UIStoreState>()(
     persist(
@@ -175,8 +167,7 @@ export const useUIStore = create<UIStoreState>()(
             toggleEditMode: () => set(state => ({ isEditMode: !state.isEditMode })),
 
             /**
-             * Toggle the visibility of a panel. If the panel is already visible, hide it.
-             * If it is hidden, show it.
+             * Toggle the visibility of a panel
              * @param {EntityId} panelId
              * @throws {StoreError} If the panel ID is not valid
              */
@@ -203,9 +194,7 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Update the grid settings. The provided object will be merged onto the
-             * existing grid settings.
-             *
+             * Update the grid settings
              * @param {object} settings - Partial grid settings to apply
              * @throws {StoreError} If the grid size is less than or equal to 0
              */
@@ -226,7 +215,7 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Get the configuration for a panel by its ID.
+             * Get the configuration for a panel by its ID
              * @param {EntityId} panelId ID of the panel to get the configuration for
              * @returns {PanelConfig} The panel configuration
              * @throws {StoreError} If the panel ID is not valid
@@ -246,7 +235,18 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Select a component within a widget
+             * Update selection state with partial data
+             * @param state Partial selection state to update
+             */
+            updateSelectionState: (state: Partial<SelectionState>) => {
+                set((current) => ({
+                    ...current,
+                    ...state
+                }));
+            },
+
+            /**
+             * Select a component within a widget - basic state update only
              * @param componentId The ID of the component to select, or null to deselect
              * @param widgetId The ID of the widget containing the component
              * @param options Additional options for selection behavior
@@ -256,7 +256,7 @@ export const useUIStore = create<UIStoreState>()(
                 widgetId: EntityId | null,
                 options = { openPropertyPanel: true, syncWithLayoutPanel: true }
             ) => {
-                const { openPropertyPanel = true, syncWithLayoutPanel = true } = options;
+                const { openPropertyPanel = true } = options;
                 const currentTime = Date.now();
                 const { selectedComponentId, selectedWidgetId, lastSelectionTime } = get();
 
@@ -289,56 +289,18 @@ export const useUIStore = create<UIStoreState>()(
                         get().togglePanel(PANEL_IDS.PROPERTY_EDITOR);
                     }
                 }
-
-                // Sync with layout panel if requested
-                if (syncWithLayoutPanel) {
-                    get().syncWithLayoutPanel(componentId, widgetId);
-                }
-
-                // Notify widget change for any listeners
-                if (widgetId) {
-                    eventBus.publish('component:selected', { componentId, widgetId });
-                }
             },
 
             /**
-             * Select a component by its instance ID
-             * @param instanceId The instance ID to select, or null to deselect
-             */
-            selectInstanceComponent: (instanceId: EntityId | null) => {
-                set(() => ({
-                    selectedComponent: instanceId
-                }));
-            },
-
-            /**
-             * Deselect all components
+             * Deselect all components - basic state update only
              */
             deselectAll: () => {
-                const { selectedWidgetId } = get();
-
-                // Update selection state
                 set({
                     selectedComponentId: null,
                     selectedComponent: null,
                     previousComponentId: get().selectedComponentId,
                     lastSelectionTime: Date.now()
                 });
-
-                // // Clear layout panel selection - This may be causing an infinite loop
-                // const layoutHierarchy = window._layoutHierarchyStore;
-                // if (layoutHierarchy?.selectItem) {
-                //     try {
-                //         layoutHierarchy.selectItem(null);
-                //     } catch (e) {
-                //         console.error('Error clearing layout panel selection:', e);
-                //     }
-                // }
-
-                // Notify widget change if a widget was selected
-                if (selectedWidgetId) {
-                    eventBus.publish('component:deselected', { widgetId: selectedWidgetId });
-                }
             },
 
             /**
@@ -348,100 +310,6 @@ export const useUIStore = create<UIStoreState>()(
              */
             isComponentSelected: (componentId: EntityId) => {
                 return get().selectedComponentId === componentId;
-            },
-
-            /**
-             * Delete the currently selected component.
-             * This method intentionally does not directly access other stores
-             * and relies on the builder service to perform the actual deletion.
-             */
-            deleteSelectedComponent: () => {
-                const { selectedComponentId, selectedWidgetId } = get();
-
-                if (!selectedComponentId || !selectedWidgetId) {
-                    console.warn('No component selected to delete');
-                    return;
-                }
-
-                // We'll only handle the selection state update here
-                // The actual deletion should be handled by the builder service
-                set({
-                    selectedComponentId: null,
-                    selectedComponent: null,
-                    previousComponentId: selectedComponentId,
-                    lastSelectionTime: Date.now()
-                });
-
-                // Emit event for deletion - to be handled by listeners
-                const event = new CustomEvent('component:delete', {
-                    detail: {
-                        componentId: selectedComponentId,
-                        widgetId: selectedWidgetId
-                    }
-                });
-                document.dispatchEvent(event);
-            },
-
-            /**
-             * Sync selection with the layout panel
-             * @param componentId The component ID to select
-             * @param widgetId The widget ID containing the component
-             */
-            syncWithLayoutPanel: (componentId: EntityId | null, widgetId: EntityId | null) => {
-                // Access the layout hierarchy store if available
-                const layoutHierarchy = window._layoutHierarchyStore;
-                if (!layoutHierarchy?.selectItem) {
-                    return;
-                }
-
-                try {
-                    if (componentId && widgetId) {
-                        // Format: widgetId/componentId
-                        layoutHierarchy.selectItem(`${widgetId}/${componentId}` as EntityId);
-                    } else {
-                        // Clear selection
-                        layoutHierarchy.selectItem(null);
-                    }
-                } catch (e) {
-                    console.error('Error syncing with layout panel:', e);
-                }
-            },
-
-            /**
-             * Get information about the currently selected component
-             * @returns Object with component info
-             */
-            getSelectedComponentInfo: () => {
-                const { selectedComponentId, selectedWidgetId } = get();
-
-                // Default return when nothing is selected
-                const defaultInfo = {
-                    componentId: null,
-                    widgetId: null,
-                    instanceId: null,
-                    type: null
-                };
-
-                if (!selectedComponentId || !selectedWidgetId) {
-                    return defaultInfo;
-                }
-
-                // Emit event to request component info - to be handled by listeners
-                const event = new CustomEvent('component:getInfo', {
-                    detail: {
-                        componentId: selectedComponentId,
-                        widgetId: selectedWidgetId
-                    }
-                });
-                document.dispatchEvent(event);
-
-                // Return placeholder - actual implementation will be in a hook
-                return {
-                    componentId: selectedComponentId,
-                    widgetId: selectedWidgetId,
-                    instanceId: null,
-                    type: null
-                };
             },
 
             /**
