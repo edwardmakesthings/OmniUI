@@ -1,9 +1,11 @@
-name: Deploy to GitHub Pages
+name: Deploy App and Storybook
 
 on:
     push:
         branches:
             - main
+    # Allow manual triggering
+    workflow_dispatch:
 
 permissions:
     contents: write
@@ -18,7 +20,7 @@ jobs:
               uses: actions/checkout@v4
 
             - name: Set up Node.js
-              uses: actions/setup-node@v3
+              uses: actions/setup-node@v4
               with:
                   node-version: "18"
                   cache: "npm"
@@ -26,11 +28,39 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-            - name: Build
+            # Build the main app
+            - name: Build app
               run: npm run build
 
+            # Build Storybook
+            - name: Build Storybook
+              run: npm run build-storybook
+
+            # Set up GitHub Pages
+            - name: Setup Pages
+              uses: actions/configure-pages@v3
+
+            # Deploy both to GitHub Pages with proper structure
+            - name: Prepare combined deployment
+              run: |
+                  # Create a combined directory
+                  mkdir -p ./combined-deploy
+
+                  # Copy main app to root
+                  cp -r dist/* ./combined-deploy/
+
+                  # Copy Storybook to /storybook subdirectory
+                  mkdir -p ./combined-deploy/storybook
+                  cp -r storybook-static/* ./combined-deploy/storybook/
+
+                  # Verify the structure
+                  ls -la ./combined-deploy
+                  ls -la ./combined-deploy/storybook
+
+            # Deploy the combined content
             - name: Deploy to GitHub Pages
               uses: JamesIves/github-pages-deploy-action@v4
               with:
+                  folder: combined-deploy
                   branch: gh-pages
-                  folder: dist
+                  clean: true
