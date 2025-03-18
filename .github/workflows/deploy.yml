@@ -7,18 +7,21 @@ on:
     workflow_dispatch:
 
 permissions:
-    contents: write
+    contents: read
     pages: write
     id-token: write
 
 jobs:
     build-and-deploy:
+        environment:
+            name: github-pages
+            url: ${{ steps.deployment.outputs.page_url }}
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
 
-            - name: Set up Node.js
+            - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
                   node-version: "18"
@@ -27,48 +30,45 @@ jobs:
             - name: Install dependencies
               run: npm ci
 
-              # Extract repo name for path configuration
-            - name: Extract repo name
-              run: echo "REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)" >> $GITHUB_ENV
-
-            # Build the main app
-            - name: Build app
+            # Build main app
+            - name: Build main app
               run: npm run build
 
             # Build Storybook
             - name: Build Storybook
               run: npm run build-storybook
 
-            # Deploy both to GitHub Pages with proper structure
+            # Create a combined directory structure for deployment
             - name: Prepare combined deployment
               run: |
-                  # Create a combined directory
-                  mkdir -p ./combined-deploy
+                  # Create a temporary directory for the combined output
+                  mkdir -p _site
 
-                  # Copy main app to root
-                  cp -r dist/* ./combined-deploy/ || echo "Main app build directory not found or empty"
+                  # Copy main app files to the root of the site
+                  cp -r dist/* _site/
 
-                  # Copy Storybook to /storybook subdirectory
-                  mkdir -p ./combined-deploy/storybook
-                  cp -r storybook-static/* ./combined-deploy/storybook/ || echo "Storybook build directory not found or empty"
+                  # Create storybook directory
+                  mkdir -p _site/storybook
 
-                  # Verify the structure
-                  echo "Main app files:"
-                  ls -la ./combined-deploy || echo "No main app files"
-                  echo "Storybook files:"
-                  ls -la ./combined-deploy/storybook || echo "No Storybook files"
+                  # Copy Storybook files to the storybook directory
+                  cp -r storybook-static/* _site/storybook/
 
-            # Deploy to GitHub Pages
-            - name: Deploy to GitHub Pages
-              uses: JamesIves/github-pages-deploy-action@v4
+                  # Create a simple indicator file to confirm both are deployed
+                  echo "<!DOCTYPE html><html><head><title>App and Storybook</title></head><body><h1>App and Storybook</h1><p>Main app is at <a href=\"./\">root</a> and Storybook is at <a href=\"./storybook/\">storybook</a> subdirectory</p></body></html>" > _site/deployment-info.html
+
+                  # List files for verification
+                  echo "Files in the root:"
+                  ls -la _site
+                  echo "Files in storybook directory:"
+                  ls -la _site/storybook
+
+            # Upload the combined site as a Pages artifact
+            - name: Upload Pages artifact
+              uses: actions/upload-pages-artifact@v3
               with:
-                  folder: combined-deploy
-                  branch: gh-pages
-                  clean: true
+                  path: _site
 
-            # Display deployment information
-            - name: Display deployment info
-              run: |
-                  echo "Deployment completed."
-                  echo "Your app should be available at: https://${{ github.repository_owner }}.github.io/${{ env.REPO_NAME }}/"
-                  echo "Your Storybook should be available at: https://${{ github.repository_owner }}.github.io/${{ env.REPO_NAME }}/storybook/"
+            # Deploy the artifact to GitHub Pages
+            - name: Deploy to GitHub Pages
+              id: deployment
+              uses: actions/deploy-pages@v4
