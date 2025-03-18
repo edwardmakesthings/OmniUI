@@ -22,6 +22,7 @@ const config: StorybookConfig = {
     autodocs: "tag",
   },
   viteFinal: async (config) => {
+    config.base = "/OmniUI/storybook/";
     if (config.resolve) {
       config.resolve.alias = {
         ...config.resolve.alias,
@@ -30,6 +31,17 @@ const config: StorybookConfig = {
     }
     return config;
   },
+
+  // Static files directory configuration
+  staticDirs: ['../public'],
+
+  // Ensure Storybook works in a subdirectory
+  managerHead: (head) => `
+    ${head}
+    <script>
+      window.STORYBOOK_BASE_PATH = '/OmniUI/storybook/';
+    </script>
+  `
 };
 
 export default config;
