@@ -6,7 +6,7 @@ export default create({
     // Brand
     brandTitle: 'OmniUI',
     brandUrl: 'https://github.com/edwardmakesthings/OmniUI',
-    brandImage: '../.storybook/omniui_storybook.svg',
+    brandImage: 'https://raw.githubusercontent.com/edwardmakesthings/OmniUI/refs/heads/main/.storybook/omniui_storybook.svg',
     brandTarget: '_self',
 
     // Colors
