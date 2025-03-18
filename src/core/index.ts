@@ -18,11 +18,8 @@ interface InitOptions {
 export async function initializeCoreSystem(options: InitOptions = {}) {
     const { resetStores = false, registerComponents = true } = options;
 
-    console.log("Initializing core system...");
-
     // Reset stores if requested
     if (resetStores) {
-        console.log("Resetting stores...");
         useWidgetStore.getState().purgeStore();
         useComponentStore.getState().purgeStore({
             resetToDefaults: true
@@ -40,8 +37,6 @@ export async function initializeCoreSystem(options: InitOptions = {}) {
 
     // Load component registry
     await loadComponentRegistry();
-
-    console.log("Core system initialized");
 
     return { registry };
 }

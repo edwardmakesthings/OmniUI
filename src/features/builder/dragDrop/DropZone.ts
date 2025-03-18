@@ -1,24 +1,67 @@
 import { EntityId } from '@/core/types/EntityTypes';
-import { DropTarget } from './DragDropCore';
 
 /**
  * Enumeration of possible drop positions
  */
 export enum DropPosition {
     BEFORE = 'before',
-    AFTER = 'after',
     INSIDE = 'inside',
+    AFTER = 'after',
 }
 
 /**
  * Interface for a drop zone configuration
  */
 export interface DropZoneConfig {
-    targetId: EntityId;
-    element: HTMLElement;
-    isContainer: boolean;
-    positions: DropPosition[];
+    zones: {
+        [key in DropPosition]?: {
+            size: string | number; // "25%" or pixels
+            position: 'start' | 'middle' | 'end';
+            requiresContainer?: boolean;
+        }
+    };
+    orientation?: 'horizontal' | 'vertical';
+    priorities?: DropPosition[];
 }
+
+export const DEFAULT_VERTICAL_CONFIG: DropZoneConfig = {
+    zones: {
+        [DropPosition.BEFORE]: { size: '25%', position: 'start' },
+        [DropPosition.INSIDE]: { size: '50%', position: 'middle', requiresContainer: true },
+        [DropPosition.AFTER]: { size: '25%', position: 'end' }
+    },
+    orientation: 'vertical',
+    priorities: [DropPosition.INSIDE, DropPosition.BEFORE, DropPosition.AFTER]
+};
+
+export const DEFAULT_HORIZONTAL_CONFIG: DropZoneConfig = {
+    zones: {
+        [DropPosition.BEFORE]: { size: '25%', position: 'start' },
+        [DropPosition.INSIDE]: { size: '50%', position: 'middle', requiresContainer: true },
+        [DropPosition.AFTER]: { size: '25%', position: 'end' }
+    },
+    orientation: 'horizontal',
+    priorities: [DropPosition.INSIDE, DropPosition.BEFORE, DropPosition.AFTER]
+};
+
+// Container-only configuration with just INSIDE position
+export const CONTAINER_ONLY_CONFIG: DropZoneConfig = {
+    zones: {
+        [DropPosition.INSIDE]: { size: '100%', position: 'middle', requiresContainer: true }
+    },
+    orientation: 'vertical',
+    priorities: [DropPosition.INSIDE]
+};
+
+// Non-container configuration with just BEFORE/AFTER
+export const NON_CONTAINER_CONFIG: DropZoneConfig = {
+    zones: {
+        [DropPosition.BEFORE]: { size: '50%', position: 'start' },
+        [DropPosition.AFTER]: { size: '50%', position: 'end' }
+    },
+    orientation: 'vertical',
+    priorities: [DropPosition.BEFORE, DropPosition.AFTER]
+};
 
 /**
  * Manager for drop zone indicators during drag and drop operations.
@@ -45,40 +88,13 @@ export class DropZoneManager {
     private constructor() { }
 
     /**
-     * Creates a DropZoneConfig from a DropTarget. The DropTarget must have an
-     * element set. The positions of the drop zone are determined by the
-     * positions property of the DropTarget, or by default will be set to
-     * [DropPosition.INSIDE]. The isContainer property of the DropZoneConfig
-     * is determined by whether DropPosition.INSIDE is in the positions
-     * array.
-     * @param target The DropTarget to create the DropZoneConfig from
-     * @returns A DropZoneConfig
-     */
-    public createDropZoneConfigFromTarget(target: DropTarget): DropZoneConfig | null {
-        if (!target.element) {
-            console.warn('Cannot create DropZoneConfig from DropTarget without element');
-            return null;
-        }
-
-        const positions = target.positions || [DropPosition.INSIDE];
-
-        return {
-            targetId: target.id,
-            element: target.element,
-            positions,
-            isContainer: positions.includes(DropPosition.INSIDE)
-        };
-    }
-
-    /**
    * Set the target element's drop position state
    * Creates indicators if they don't exist yet
    */
     public setDropPosition(
         targetId: EntityId,
         element: HTMLElement,
-        position: DropPosition | null,
-        isContainer: boolean
+        position: DropPosition | null
     ): void {
         // Register the element if it's not already tracked
         if (!this.activeElements.has(targetId)) {
@@ -86,6 +102,9 @@ export class DropZoneManager {
                 element,
                 activePosition: null
             });
+
+            // Detect if element is a container
+            const isContainer = this.isContainer(element);
 
             // Create indicators for this element
             this.createIndicatorsForElement(targetId, element, isContainer);
@@ -163,9 +182,10 @@ export class DropZoneManager {
         indicator.style.zIndex = '1000';
         indicator.style.transition = 'opacity 0.15s ease';
 
-        // Position-specific styling
+        // Position-specific styling based on our configuration
         switch (position) {
             case DropPosition.BEFORE:
+                // Top/Left indicator
                 indicator.style.top = '0';
                 indicator.style.left = '0';
                 indicator.style.right = '0';
@@ -175,6 +195,7 @@ export class DropZoneManager {
                 indicator.style.boxShadow = '0 0 3px rgba(59, 130, 246, 0.5)';
                 break;
             case DropPosition.AFTER:
+                // Bottom/Right indicator
                 indicator.style.bottom = '0';
                 indicator.style.left = '0';
                 indicator.style.right = '0';
@@ -184,6 +205,7 @@ export class DropZoneManager {
                 indicator.style.boxShadow = '0 0 3px rgba(59, 130, 246, 0.5)';
                 break;
             case DropPosition.INSIDE:
+                // Container indicator
                 indicator.style.inset = '0';
                 indicator.style.border = '2px dashed #3b82f6';
                 indicator.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
@@ -312,47 +334,130 @@ export class DropZoneManager {
         element: HTMLElement,
         x: number,
         y: number,
-        isContainer: boolean,
-        availablePositions: DropPosition[] = [DropPosition.BEFORE, DropPosition.AFTER, DropPosition.INSIDE],
-        horizontal?: boolean
+        options: Partial<DropZoneConfig> = {}
     ): DropPosition {
-        // If only one position is available, return it
-        if (availablePositions.length === 1) {
-            return availablePositions[0];
+        // Detect if element is a container
+        const isContainer = this.isContainer(element);
+
+        // Determine default config to use
+        let baseConfig = DEFAULT_VERTICAL_CONFIG;
+
+        // Override for horizontal elements
+        if (options.orientation === 'horizontal' ||
+            element.getAttribute('data-orientation') === 'horizontal') {
+            baseConfig = DEFAULT_HORIZONTAL_CONFIG;
         }
 
+        // If element is a container, prioritize INSIDE
+        if (isContainer) {
+            // Use available positions to filter allowed drop zones
+            const availablePositions = options.priorities ||
+                [DropPosition.BEFORE, DropPosition.INSIDE, DropPosition.AFTER];
+
+            // Create config with only allowed positions
+            const customConfig: DropZoneConfig = {
+                zones: {},
+                orientation: baseConfig.orientation,
+                priorities: []
+            };
+
+            // Add zones for available positions
+            availablePositions.forEach(pos => {
+                if (baseConfig.zones[pos]) {
+                    customConfig.zones[pos] = baseConfig.zones[pos];
+                    customConfig.priorities?.push(pos);
+                }
+            });
+
+            // Merge with provided options
+            const config = { ...customConfig, ...options };
+            return this.calculatePositionFromConfig(element, x, y, config);
+        }
+
+        // For non-containers, use the non-container config
+        const config = { ...NON_CONTAINER_CONFIG, ...options };
+        return this.calculatePositionFromConfig(element, x, y, config);
+    }
+
+    /**
+     * Calculates drop position based on pointer coordinates and element configuration
+     * @param element Element being dragged over
+     * @param x Client X coordinate
+     * @param y Client Y coordinate
+     * @param config Zone configuration
+     * @returns The appropriate drop position
+     */
+    private calculatePositionFromConfig(
+        element: HTMLElement,
+        x: number,
+        y: number,
+        config: DropZoneConfig
+    ): DropPosition {
+        const { zones, orientation, priorities } = config;
         const rect = element.getBoundingClientRect();
+        const isHorizontal = orientation === 'horizontal';
 
-        // Calculate relative positions
-        const relativeX = x - rect.left;
-        const relativeY = y - rect.top;
+        // Parse size values as percentages or absolute pixels
+        const parseSize = (size: string | number, dimension: number): number => {
+            if (typeof size === 'number') return size;
+            if (size.endsWith('%')) {
+                const percentage = parseFloat(size) / 100;
+                return dimension * percentage;
+            }
+            return parseFloat(size);
+        };
 
-        // Calculate percentages
-        const percentageX = relativeX / rect.width;
-        const percentageY = relativeY / rect.height;
+        // Determine relative position within element
+        const relX = x - rect.left;
+        const relY = y - rect.top;
+        const relativePos = isHorizontal ? relX / rect.width : relY / rect.height;
 
-        const percentUsed = horizontal ? percentageX : percentageY;
+        // Check if point is within element bounds
+        if (relX < 0 || relX > rect.width || relY < 0 || relY > rect.height) {
+            // If out of bounds, return first available position
+            return priorities?.[0] || DropPosition.BEFORE;
+        }
 
-        // Define edge zones - 25% for more reliable edge detection
-        const edgeZone = horizontal ? rect.width * 0.25 : rect.height * 0.25;
+        // Calculate zone boundaries
+        let accumulatedSize = 0;
+        const zoneBoundaries: Record<DropPosition, [number, number]> = {} as any;
 
-        // Check for container-specific logic
-        if (isContainer && availablePositions.includes(DropPosition.INSIDE)) {
-            // For containers, use larger middle area (50%)
-            if (relativeY > edgeZone && relativeY < rect.height - edgeZone) {
-                return DropPosition.INSIDE;
+        // Compute each zone's range
+        for (const position of Object.values(DropPosition)) {
+            const zone = zones[position];
+            if (!zone) continue;
+            // Skip zones that require container if element isn't a container
+            if (zone.requiresContainer && !this.isContainer(element)) continue;
+
+            const dimension = isHorizontal ? rect.width : rect.height;
+            const zoneSize = parseSize(zone.size, dimension);
+            const startPoint = accumulatedSize;
+            const endPoint = startPoint + zoneSize;
+
+            zoneBoundaries[position] = [startPoint / dimension, endPoint / dimension];
+            accumulatedSize += zoneSize;
+        }
+
+        // Find which zone contains the position
+        for (const position of priorities || Object.keys(config.zones)) {
+            const posEnum = position as DropPosition;
+            if (!zoneBoundaries[posEnum]) continue;
+
+            const [start, end] = zoneBoundaries[posEnum];
+            if (relativePos >= start && relativePos <= end) {
+                return posEnum;
             }
         }
 
-        // Use before/after based on vertical position
-        if (percentUsed < 0.5 && availablePositions.includes(DropPosition.BEFORE)) {
-            return DropPosition.BEFORE;
-        } else if (availablePositions.includes(DropPosition.AFTER)) {
-            return DropPosition.AFTER;
-        }
+        // Fallback: return position based on whether we're in first or second half
+        return relativePos < 0.5 ? DropPosition.BEFORE : DropPosition.AFTER;
+    }
 
-        // Fallback to first available position
-        return availablePositions[0];
+    /**
+     * Determines if an element is a container
+     */
+    private isContainer(element: HTMLElement): boolean {
+        return element.getAttribute('data-is-container') === 'true';
     }
 
     /**
@@ -368,13 +473,9 @@ export class DropZoneManager {
             `[data-widget-id="${widgetId}"] [data-is-nested-container="true"]`
         );
 
-        // Check nested container overlays first (they should take priority)
+        // Check each container element to see if it contains the point
         for (const element of Array.from(nestedContainers)) {
-            const rect = element.getBoundingClientRect();
-
-            // Check if point is inside rectangle
-            if (this.isPointInRectangle(x, y, rect)) {
-                // Get container ID
+            if (this.isPointInElement(element as HTMLElement, x, y)) {
                 const containerId = element.getAttribute("data-container-id");
                 if (!containerId) continue;
 
@@ -393,11 +494,7 @@ export class DropZoneManager {
         );
 
         for (const element of Array.from(containerElements)) {
-            const rect = element.getBoundingClientRect();
-
-            // Check if point is inside rectangle
-            if (this.isPointInRectangle(x, y, rect)) {
-                // Get container ID
+            if (this.isPointInElement(element as HTMLElement, x, y)) {
                 const containerId = element.getAttribute("data-component-id");
                 if (!containerId) continue;
 

@@ -105,7 +105,7 @@ export const TreeItem = memo(
                             size={12}
                             className={cn(
                                 "transition-transform duration-200",
-                                isExpanded && "rotate-180"
+                                !isExpanded && "-rotate-90"
                             )}
                         />
                     </div>

@@ -271,7 +271,6 @@ const LayoutPanel = () => {
     useEventSubscription(
         "component:deleted",
         () => {
-            console.log("Layout panel received component delete event");
             // Component deletions should also trigger a full refresh
             forceRefresh();
         },
@@ -282,7 +281,6 @@ const LayoutPanel = () => {
     useEventSubscription(
         "component:updated",
         () => {
-            console.log("Layout panel received component update event");
             debouncedRefresh();
         },
         [debouncedRefresh]
@@ -292,7 +290,6 @@ const LayoutPanel = () => {
     useEventSubscription(
         "hierarchy:changed",
         () => {
-            console.log("Layout panel received hierarchy change event");
             // Hierarchy changes are critical and need a full refresh
             forceRefresh();
         },
@@ -303,7 +300,6 @@ const LayoutPanel = () => {
     useEventSubscription(
         "component:reordered",
         () => {
-            console.log("Layout panel received component reorder event");
             // Component reordering needs a full refresh
             forceRefresh();
         },
@@ -330,10 +326,10 @@ const LayoutPanel = () => {
         }
 
         lastWidgetUpdateRef.current = now;
-        console.log(
-            "Fetching hierarchies for widgets:",
-            widgets.map((w) => w.id).join(", ")
-        );
+        // console.log(
+        //     "Fetching hierarchies for widgets:",
+        //     widgets.map((w) => w.id).join(", ")
+        // );
 
         const fetchAllHierarchies = async () => {
             try {
@@ -363,9 +359,9 @@ const LayoutPanel = () => {
                     validHierarchies.length > 0 ||
                     hierarchyDataRef.current.length > 0
                 ) {
-                    console.log(
-                        `Updating hierarchy data: ${validHierarchies.length} hierarchies found`
-                    );
+                    // console.log(
+                    //     `Updating hierarchy data: ${validHierarchies.length} hierarchies found`
+                    // );
                     hierarchyDataRef.current = validHierarchies;
 
                     // Safely trigger re-render without causing infinite loops
@@ -417,8 +413,6 @@ const LayoutPanel = () => {
         if (hierarchyDataRef.current.length > 0) {
             return hierarchyDataRef.current;
         }
-
-        console.log(widgets);
 
         // Default fallback if hierarchy data isn't available yet
         return widgets.map((widget) => ({
