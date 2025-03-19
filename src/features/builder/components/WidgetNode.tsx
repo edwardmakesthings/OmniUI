@@ -214,10 +214,6 @@ export const WidgetNode = memo(function WidgetNode({
         "component:moved",
         (event) => {
             if (event.data.widgetId === data.id) {
-                console.log(
-                    "Widget received component move event:",
-                    event.data
-                );
                 refreshWidget();
             }
         },
@@ -229,10 +225,6 @@ export const WidgetNode = memo(function WidgetNode({
         "hierarchy:changed",
         (event) => {
             if (event.data.widgetId === data.id) {
-                console.log(
-                    "Widget received hierarchy change event:",
-                    event.data
-                );
                 refreshWidget();
             }
         },
@@ -442,7 +434,7 @@ export const WidgetNode = memo(function WidgetNode({
 
     // Set active widget when selected
     useEffect(() => {
-        if (selected && data.id) {
+        if (selected && data.id && selection.selectedWidgetId !== data.id) {
             // Use selection.selectWidget instead of direct store interaction
             selection.selectWidget(data.id);
         }

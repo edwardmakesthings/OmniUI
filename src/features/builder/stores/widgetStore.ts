@@ -1041,7 +1041,7 @@ export const useWidgetStore = create<WidgetStore>()(
             ) => {
                 set(state => {
                     // Debug logging
-                    console.log(`ARRAY REORDER: ${componentId} ${position} ${targetId} in ${containerId}`);
+                    // console.log(`ARRAY REORDER: ${componentId} ${position} ${targetId} in ${containerId}`);
 
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
@@ -1121,8 +1121,8 @@ export const useWidgetStore = create<WidgetStore>()(
                     }
 
                     // Log the results for debugging
-                    console.log("BEFORE:", originalComponents.map(c => c.id).join(", "));
-                    console.log("AFTER:", result.map(c => c.id).join(", "));
+                    // console.log("BEFORE:", originalComponents.map(c => c.id).join(", "));
+                    // console.log("AFTER:", result.map(c => c.id).join(", "));
 
                     // Replace the entire components array with our new one
                     return {

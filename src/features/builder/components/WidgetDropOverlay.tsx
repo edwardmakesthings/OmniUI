@@ -156,6 +156,18 @@ export const WidgetDropOverlay: FC<WidgetDropOverlayProps> = ({
 
                 const dragData = JSON.parse(dragDataStr);
 
+                // Extract source widget ID more reliably
+                const sourceWidgetId =
+                    dragData.widgetId ||
+                    (dragData.data && dragData.data.widgetId);
+
+                // Log for debugging
+                console.log("Drop data:", {
+                    type: dragData.type,
+                    sourceWidgetId,
+                    destinationWidgetId: widgetId,
+                });
+
                 // Calculate exact position for the drop
                 const dropPosition: Position = {
                     x: {
@@ -176,7 +188,7 @@ export const WidgetDropOverlay: FC<WidgetDropOverlayProps> = ({
 
                 // Handle the drop through the manager
                 const success = widgetOverlayManager.handleDrop(
-                    dragData.data || dragData,
+                    dragData,
                     dragData.type,
                     dropPosition
                 );
@@ -192,7 +204,7 @@ export const WidgetDropOverlay: FC<WidgetDropOverlayProps> = ({
             } catch (error) {
                 console.error("Error handling drop:", error);
             } finally {
-                // Always clear state
+                // Always clean up
                 widgetOverlayManager.clearCurrentIndicators();
                 setCurrentTarget(null);
                 setIsOver(false);

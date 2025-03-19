@@ -417,8 +417,8 @@ export function createBuilderService(dependencies: BuilderDependencies) {
         ): boolean {
             try {
                 // Debug logging
-                console.log(`[BUILDER] Reordering component ${componentId} to be ${position} ${targetId}`);
-                console.log(`[BUILDER] Container: ${containerId}`);
+                // console.log(`[BUILDER] Reordering component ${componentId} to be ${position} ${targetId}`);
+                // console.log(`[BUILDER] Container: ${containerId}`);
 
                 // Get widget to verify components exist
                 const widget = widgetStore.getState().getWidget(widgetId);
@@ -469,8 +469,8 @@ export function createBuilderService(dependencies: BuilderDependencies) {
                     isRootLevel ? !c.parentId : c.parentId === containerId
                 );
 
-                console.log(`[BUILDER] Before reordering:`);
-                console.log(siblings.map(s => ({ id: s.id, zIndex: s.zIndex })));
+                // console.log(`[BUILDER] Before reordering:`);
+                // console.log(siblings.map(s => ({ id: s.id, zIndex: s.zIndex })));
 
                 // Call widgetStore's reorderComponents
                 widgetStore.getState().reorderComponents(
@@ -488,8 +488,8 @@ export function createBuilderService(dependencies: BuilderDependencies) {
                         isRootLevel ? !c.parentId : c.parentId === containerId
                     ).sort((a, b) => a.zIndex - b.zIndex);
 
-                    console.log(`[BUILDER] After reordering:`);
-                    console.log(updatedSiblings.map(s => ({ id: s.id, zIndex: s.zIndex })));
+                    // console.log(`[BUILDER] After reordering:`);
+                    // console.log(updatedSiblings.map(s => ({ id: s.id, zIndex: s.zIndex })));
 
                     // Check if the component is in the expected position
                     const componentIndex = updatedSiblings.findIndex(c => c.id === componentId);

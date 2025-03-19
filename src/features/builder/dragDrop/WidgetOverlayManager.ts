@@ -353,8 +353,6 @@ export class WidgetOverlayManager {
      * Clear all drop indicators
      */
     clearCurrentIndicators(): void {
-        console.log("AGGRESSIVE CLEANUP: Clearing all drop indicators and attributes");
-
         // If we have a current target, clear its indicators first
         if (this.currentTarget && this.currentTarget.componentId) {
             const element = document.querySelector(`[data-component-id="${this.currentTarget.componentId}"]`);
@@ -494,8 +492,15 @@ export class WidgetOverlayManager {
             componentId: targetComponentId,
             position: dropPosition,
             parentId: targetParentId,
-            sourceWidgetId,
+            sourceWidgetId: targetSourceWidgetId,
         } = this.currentTarget;
+
+        // Extract source widget ID from drag data with better fallbacks
+        const dataSourceWidgetId = dragData.widgetId ||
+            (dragData.data && dragData.data.widgetId);
+
+        // Use the most reliable source
+        const sourceWidgetId = dataSourceWidgetId || targetSourceWidgetId;
 
         // Determine if this is a cross-widget operation
         const isCrossWidgetDrop = (sourceWidgetId &&
@@ -665,12 +670,12 @@ export class WidgetOverlayManager {
         sourceWidgetId: EntityId | undefined,
         isCrossWidgetDrop: boolean
     ): boolean {
-        const sourceComponentId = dragData.id || dragData.data?.id;
+        // Extract component ID reliably
+        const sourceComponentId = dragData.id || (dragData.data && dragData.data.id);
 
-        // Use the source widget ID from the drag data, or from the current target
-        const actualSourceWidgetId =
-            dragData.widgetId ||
-            dragData.data?.widgetId ||
+        // More reliable source widget ID extraction
+        const actualSourceWidgetId = dragData.widgetId ||
+            (dragData.data && dragData.data.widgetId) ||
             sourceWidgetId;
 
         if (!sourceComponentId || !actualSourceWidgetId) {
@@ -684,10 +689,10 @@ export class WidgetOverlayManager {
             return false;
         }
 
-        // Use isCrossWidgetDrop for logging and special handling
+        // Log for cross-widget operations
         if (isCrossWidgetDrop) {
             console.log(`Processing cross-widget component move from ${actualSourceWidgetId} to ${destinationWidgetId}`);
-
+            console.log("Drag data:", dragData);
             // You could apply special handling for cross-widget drops here
             // For example, different validation rules or notifications
         }

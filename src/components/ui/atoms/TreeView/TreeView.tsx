@@ -278,6 +278,18 @@ export const TreeView = ({
                         level={0}
                         selectionManager={selectionManager}
                         onMove={handleMove}
+                        className={`tree-item-${item.id.replace(
+                            /[^a-zA-Z0-9-_]/g,
+                            "-"
+                        )}`}
+                        styleProps={{
+                            variant: "default",
+                            elements: {
+                                root: {
+                                    base: "data-tree-item-id=" + item.id,
+                                },
+                            },
+                        }}
                     />
                 ))}
             </ScrollBox>
