@@ -48,7 +48,8 @@ const BasePanel = ({
 
     if (!config.isVisible) return null;
 
-    const baseClasses = "bg-bg-dark text-font-dark border-accent-dark-neutral";
+    const baseClasses =
+        "bg-bg-dark text-font-dark border-accent-dark-neutral flex flex-col";
 
     const positionClasses = {
         [PanelPositionValues.Left]: "border-r-3 col-start-2",

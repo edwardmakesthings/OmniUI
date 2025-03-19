@@ -145,6 +145,7 @@ export type DropPosition = 'before' | 'after' | 'inside';
 export interface DropTarget {
     id: string;
     position: DropPosition;
+    data?: Record<string, any>;
 }
 
 export interface DragDropProps {

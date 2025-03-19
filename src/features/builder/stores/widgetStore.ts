@@ -119,7 +119,8 @@ export interface WidgetStore {
         componentId: EntityId,
         newParentId?: EntityId, // undefined means move to root
         destinationWidgetId?: EntityId, // undefined means same widget as source
-    ) => void;
+        instanceMap?: Map<EntityId, EntityId> // Map of old instance IDs to new instance IDs
+    ) => boolean;
 
     // Get component hierarchy
     getComponentHierarchy: (
@@ -502,11 +503,45 @@ export const useWidgetStore = create<WidgetStore>()(
              * @param componentId ID of the component to find
              * @returns The component or null if not found
              */
-            findComponent: (widgetId, componentId) => {
+            findComponent: (widgetId: EntityId, componentId: EntityId) => {
                 const widget = get().widgets[widgetId];
-                if (!widget) return null;
+                if (!widget) {
+                    console.error(`Widget ${widgetId} not found`);
+                    return null;
+                }
 
-                return widget.components.find(c => c.id === componentId) || null;
+                // First try the direct approach
+                const component = widget.components.find(c => c.id === componentId);
+                if (component) return component;
+
+                // If not found, try case-insensitive search as a fallback
+                // Sometimes IDs can get mangled or mismatched letter case
+                const lowerComponentId = componentId.toLowerCase();
+                const caseInsensitiveMatch = widget.components.find(c =>
+                    c.id.toLowerCase() === lowerComponentId
+                );
+
+                if (caseInsensitiveMatch) {
+                    console.warn(`Found component ${componentId} with case-insensitive match`);
+                    return caseInsensitiveMatch;
+                }
+
+                // If still not found, try partial match on the ID suffix
+                // This can help with widget ID prefix issues
+                if (componentId.includes('-')) {
+                    const idSuffix = componentId.split('-')[1];
+                    const suffixMatch = widget.components.find(c =>
+                        c.id.endsWith(idSuffix)
+                    );
+
+                    if (suffixMatch) {
+                        console.warn(`Found component by suffix match: ${componentId} -> ${suffixMatch.id}`);
+                        return suffixMatch;
+                    }
+                }
+
+                console.error(`Component ${componentId} not found in widget ${widgetId}`);
+                return null;
             },
 
             /**
@@ -655,18 +690,20 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
-             * Move a component within or between widgets
+             * Move a component within or between widgets with support for instance mapping
              * @param sourceWidgetId Source widget containing the component
              * @param componentId The component to move
              * @param newParentId New parent ID or undefined for root level (optional)
              * @param destinationWidgetId Destination widget if different from source (optional)
+             * @param instanceMap Optional map from old instance IDs to new instance IDs for cross-widget moves
              */
             moveComponent: (
                 sourceWidgetId: EntityId,
                 componentId: EntityId,
                 newParentId?: EntityId, // undefined means move to root
                 destinationWidgetId?: EntityId, // undefined means same widget as source
-            ) => {
+                instanceMap?: Map<EntityId, EntityId> // Map of old instance IDs to new instance IDs
+            ): boolean => {
                 set(state => {
                     // Get source widget and destination widget (same as source if not specified)
                     const sourceWidget = state.widgets[sourceWidgetId];
@@ -703,7 +740,7 @@ export const useWidgetStore = create<WidgetStore>()(
                         if (foundCircular) return state;
                     }
 
-                    // Create a new state object
+                    // Create a new state object to avoid mutations
                     const newState = { ...state };
 
                     // Handle same-widget moves (simpler case)
@@ -795,14 +832,22 @@ export const useWidgetStore = create<WidgetStore>()(
                         });
 
                         // 3. Update the moved components with new parent references
+                        // and update instance IDs if provided
                         const modifiedComponentsToMove = componentsToMove.map(c => {
+                            // Clone the component
+                            const updatedComponent = { ...c };
+
                             // If this is the root component being moved, update its parent
                             if (c.id === componentId) {
-                                return { ...c, parentId: newParentId || undefined };
+                                updatedComponent.parentId = newParentId || undefined;
                             }
 
-                            // For child components, keep them as they are
-                            return c;
+                            // If we have an instance map, update the instance ID
+                            if (instanceMap && instanceMap.has(c.instanceId)) {
+                                updatedComponent.instanceId = instanceMap.get(c.instanceId)!;
+                            }
+
+                            return updatedComponent;
                         });
 
                         // 4. Add components to destination widget
@@ -828,32 +873,8 @@ export const useWidgetStore = create<WidgetStore>()(
                     return newState;
                 });
 
-                // Generate events based on whether this is a cross-widget move
-                const isCrossWidgetMove = destinationWidgetId && destinationWidgetId !== sourceWidgetId;
-
-                if (isCrossWidgetMove) {
-                    // Notify about cross-widget movement
-                    eventBus.publish('component:moved', {
-                        sourceWidgetId,
-                        destinationWidgetId,
-                        componentId,
-                        parentId: newParentId
-                    });
-
-                    // Notify about hierarchy changes in both widgets
-                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
-                    eventBus.publish('hierarchy:changed', { widgetId: destinationWidgetId });
-                } else {
-                    // Notify about same-widget movement
-                    eventBus.publish('component:moved', {
-                        widgetId: sourceWidgetId,
-                        componentId,
-                        parentId: newParentId
-                    });
-
-                    // Notify about hierarchy change
-                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
-                }
+                // Success - let caller handle events
+                return true;
             },
 
             /**

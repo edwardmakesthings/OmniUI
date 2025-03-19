@@ -9,6 +9,7 @@ import { createEntityId, EntityId } from '@/core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
 import { MeasurementUtils } from '@/core/types/Measurement';
 import { ComponentsIcon, ConnectionsIcon, LayoutIcon, PropertyEditorIcon, ThemeIcon, WidgetsIcon } from '@/components/ui/icons';
+import eventBus from '@/core/eventBus/eventBus';
 
 // Default grid settings
 const DEFAULT_GRID_SETTINGS = {
@@ -53,23 +54,6 @@ export const PANEL_TOOLTIPS: Record<PanelName, string> = {
 
 export type PanelTooltipName = keyof typeof PANEL_TOOLTIPS;
 
-// Selection state interface
-export interface SelectionState {
-    // Currently selected component and widget IDs
-    selectedComponentId: EntityId | null;
-    selectedWidgetId: EntityId | null;
-
-    // Previous selection state for managing focus history
-    previousComponentId: EntityId | null;
-    previousWidgetId: EntityId | null;
-
-    // Timestamp of last selection for debouncing
-    lastSelectionTime: number;
-
-    // Selection counts for analytics (useful for future features)
-    selectionCount: number;
-}
-
 // Default panel configurations
 const DEFAULT_PANEL_CONFIGS = {
     [PANEL_IDS.COMPONENT_PALETTE]: {
@@ -98,6 +82,48 @@ const DEFAULT_PANEL_CONFIGS = {
     }
 };
 
+/**
+ * Drag operation tracking state
+ */
+export interface DragState {
+    // Active drag operation
+    isDragging: boolean;
+    sourceId?: string;
+    sourceWidgetId?: EntityId;
+    sourceComponentId?: EntityId;
+
+    // Drop target tracking
+    targetId?: string;
+    targetWidgetId?: EntityId;
+    targetComponentId?: EntityId;
+
+    // Metadata
+    timestamp?: number;
+    dragType?: string;
+}
+
+// Default drag state
+const DEFAULT_DRAG_STATE: DragState = {
+    isDragging: false
+};
+
+// Selection state interface
+export interface SelectionState {
+    // Currently selected component and widget IDs
+    selectedComponentId: EntityId | null;
+    selectedWidgetId: EntityId | null;
+
+    // Previous selection state for managing focus history
+    previousComponentId: EntityId | null;
+    previousWidgetId: EntityId | null;
+
+    // Timestamp of last selection for debouncing
+    lastSelectionTime: number;
+
+    // Selection counts for analytics (useful for future features)
+    selectionCount: number;
+}
+
 // Initial selection state
 const DEFAULT_SELECTION_STATE: SelectionState = {
     selectedComponentId: null,
@@ -107,6 +133,17 @@ const DEFAULT_SELECTION_STATE: SelectionState = {
     lastSelectionTime: 0,
     selectionCount: 0
 };
+
+export interface LayoutHierarchyOperations {
+    // Select an item in the hierarchy (format: widgetId/componentId or just widgetId)
+    selectItem: (id: EntityId | null) => void;
+
+    // Get currently selected items in the hierarchy
+    getSelectedItems: () => string[];
+
+    // Refresh the hierarchy view
+    refreshView: (force?: boolean) => void;
+}
 
 /**
  * Extended UI store interface that includes selection state and methods
@@ -136,6 +173,36 @@ export interface UIStoreState extends UIState, SelectionState {
     deselectAll: () => void;
     isComponentSelected: (componentId: EntityId) => boolean;
 
+    // Drag state
+    dragState: DragState;
+
+    // Drag operations
+    startDrag: (data: {
+        sourceId: string;
+        sourceWidgetId?: EntityId;
+        sourceComponentId?: EntityId;
+        dragType?: string;
+    }) => void;
+
+    updateDragTarget: (data: {
+        targetId?: string;
+        targetWidgetId?: EntityId;
+        targetComponentId?: EntityId;
+    }) => void;
+
+    endDrag: () => void;
+
+    // Layout hierarchy operations
+    layoutHierarchy: {
+        // Function to call when the hierarchy should be refreshed
+        refreshRequested: boolean;
+        forceRefresh: boolean;
+        requestRefresh: (force?: boolean) => void;
+
+        // Function to track when refresh is completed
+        refreshCompleted: () => void;
+    };
+
     // Store reset
     resetState: (options?: { keepEditorState?: boolean }) => void;
 }
@@ -154,6 +221,10 @@ export const useUIStore = create<UIStoreState>()(
 
             // Selection State
             ...DEFAULT_SELECTION_STATE,
+
+            // Drag State
+            dragState: DEFAULT_DRAG_STATE,
+            layoutHierarchyStore: null,
 
             // Panel States
             panelStates: Object.keys(DEFAULT_PANEL_CONFIGS).reduce((acc, id) => ({
@@ -313,6 +384,82 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
+             * Start tracking a drag operation
+             */
+            startDrag: (data) => {
+                set((_state) => ({
+                    dragState: {
+                        isDragging: true,
+                        sourceId: data.sourceId,
+                        sourceWidgetId: data.sourceWidgetId,
+                        sourceComponentId: data.sourceComponentId,
+                        dragType: data.dragType || 'component',
+                        timestamp: Date.now()
+                    }
+                }));
+
+                // Add class to body for global styling during drag
+                document.body.classList.add('drag-in-progress');
+                if (data.sourceWidgetId) {
+                    document.body.setAttribute('data-drag-widget', data.sourceWidgetId.toString());
+                }
+            },
+
+            /**
+             * Update the drag target information
+             */
+            updateDragTarget: (data) => {
+                set((state) => ({
+                    dragState: {
+                        ...state.dragState,
+                        targetId: data.targetId,
+                        targetWidgetId: data.targetWidgetId,
+                        targetComponentId: data.targetComponentId
+                    }
+                }));
+            },
+
+            /**
+             * End drag tracking operation
+             */
+            endDrag: () => {
+                set({
+                    dragState: DEFAULT_DRAG_STATE
+                });
+
+                // Remove drag styling classes
+                document.body.classList.remove('drag-in-progress');
+                document.body.removeAttribute('data-drag-widget');
+            },
+
+            layoutHierarchy: {
+                refreshRequested: false,
+                forceRefresh: false,
+
+                // Request a refresh of the layout hierarchy
+                requestRefresh: (force = false) => {
+                    set(state => ({
+                        layoutHierarchy: {
+                            ...state.layoutHierarchy,
+                            refreshRequested: true,
+                            forceRefresh: force
+                        }
+                    }));
+                },
+
+                // Mark refresh as completed
+                refreshCompleted: () => {
+                    set(state => ({
+                        layoutHierarchy: {
+                            ...state.layoutHierarchy,
+                            refreshRequested: false,
+                            forceRefresh: false
+                        }
+                    }));
+                }
+            },
+
+            /**
              * Reset the UI state to defaults
              * @param options Options for controlling what state is preserved
              */
@@ -321,7 +468,8 @@ export const useUIStore = create<UIStoreState>()(
 
                 const newState: Partial<UIStoreState> = {
                     ...DEFAULT_SELECTION_STATE,
-                    selectedComponent: null
+                    selectedComponent: null,
+                    dragState: DEFAULT_DRAG_STATE
                 };
 
                 // Only reset editor state if explicitly requested
@@ -335,6 +483,12 @@ export const useUIStore = create<UIStoreState>()(
                 }
 
                 set(newState);
+
+                // Publish an event to notify subscribers about the reset
+                // This ensures LayoutPanel and other subscribers can respond
+                setTimeout(() => {
+                    eventBus.publish("store:reset", { timestamp: Date.now() });
+                }, 0);
             }
         }),
         {
@@ -412,14 +566,33 @@ export function useGridSettings() {
 }
 
 /**
- * Type definition for layout hierarchy store
+ * Hook to access and manipulate drag state
  */
-declare global {
-    interface Window {
-        _layoutHierarchyStore?: {
-            selectItem: (id: EntityId | null) => void;
-            getSelectedItems: () => string[];
-            refreshView: () => void;
-        };
-    }
+export function useDragTracking() {
+    const dragState = useUIStore(state => state.dragState);
+    const startDrag = useUIStore(state => state.startDrag);
+    const updateDragTarget = useUIStore(state => state.updateDragTarget);
+    const endDrag = useUIStore(state => state.endDrag);
+
+    return {
+        dragState,
+        startDrag,
+        updateDragTarget,
+        endDrag
+    };
+}
+
+/**
+ * Hook to access layout hierarchy operations
+ */
+export function useLayoutHierarchy() {
+    const { refreshRequested, forceRefresh, requestRefresh, refreshCompleted } =
+        useUIStore(state => state.layoutHierarchy);
+
+    return {
+        refreshRequested,
+        forceRefresh,
+        requestRefresh,
+        refreshCompleted
+    };
 }

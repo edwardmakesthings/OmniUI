@@ -25,6 +25,7 @@ export type EventType =
     | 'widget:deselected'
     | 'layout:refreshed'
     | 'ui:panel:toggled'
+    | 'store:reset'
     | 'drag:started'
     | 'drag:ended'
     | 'drop:occurred';

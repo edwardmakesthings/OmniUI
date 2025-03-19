@@ -1,7 +1,15 @@
-import { AriaAttributes, memo, useRef } from "react";
+import {
+    AriaAttributes,
+    memo,
+    useEffect,
+    useRef,
+    DragEvent,
+    MouseEvent,
+} from "react";
 import { BaseInteractor } from "@/components/base/interactive/BaseInteractor";
 import {
     DivProps,
+    DragData,
     DropPosition,
     DropTarget,
     RenderElementProps,
@@ -13,12 +21,24 @@ import { treeItemPreset } from "@/components/base/style/presets/treeView";
 import { draggingStyles } from "@/components/base/style/compositions";
 
 export interface TreeItemProps
-    extends Omit<DivProps<"content" | "icon" | "caret">, "as"> {
+    extends Omit<
+        DivProps<"content" | "icon" | "caret">,
+        "as" | "onDragStart" | "onDragOver"
+    > {
     // Core props
     item: TreeItemData;
     level: number;
     selectionManager: TreeSelectionManager;
     onMove?: (draggedId: string, target: DropTarget) => void;
+
+    // Drag event callbacks
+    onDragStart?: (draggedId: string, data?: any) => void;
+    onDragOver?: (targetId: string, data?: any) => void;
+    onDragEnd?: (data?: any) => void;
+
+    // Extended behaviors
+    getDragData?: (item: TreeItemData) => any;
+    getDropData?: (item: TreeItemData) => any;
 
     // Style customization
     className?: string;
@@ -33,6 +53,15 @@ export const TreeItem = memo(
         level,
         selectionManager,
         onMove,
+
+        // Drag event callbacks
+        onDragStart,
+        onDragOver,
+        onDragEnd,
+
+        // Extended behaviors
+        getDragData,
+        getDropData,
 
         // Style props
         className,
@@ -53,11 +82,80 @@ export const TreeItem = memo(
             }
         };
 
-        const handleExpand = (e: React.MouseEvent) => {
+        const handleExpand = (e: MouseEvent) => {
             e.stopPropagation();
             if (hasChildren) {
                 selectionManager.toggleExpansion(item.id);
             }
+        };
+
+        // Set up event handlers for drag operations
+        useEffect(() => {
+            if (!itemRef.current) return;
+
+            const element = itemRef.current;
+
+            // Create data attribute for easier identification
+            if (item.id.includes("/")) {
+                const [widgetId] = item.id.split("/");
+                element.setAttribute("data-widget-id", widgetId);
+            }
+
+            // Drag start handler
+            const handleDragStart = () => {
+                // Get custom drag data if callback provided
+                const dragData = getDragData ? getDragData(item) : null;
+
+                // Call the callback if provided
+                if (onDragStart) {
+                    onDragStart(item.id, dragData);
+                }
+            };
+
+            // Drag end handler
+            const handleDragEnd = () => {
+                // Call the callback if provided
+                if (onDragEnd) {
+                    onDragEnd({ id: item.id });
+                }
+            };
+
+            // Add the event listeners
+            element.addEventListener("dragstart", handleDragStart);
+            element.addEventListener("dragend", handleDragEnd);
+
+            // Clean up
+            return () => {
+                element.removeEventListener("dragstart", handleDragStart);
+                element.removeEventListener("dragend", handleDragEnd);
+            };
+        }, [item, onDragStart, onDragEnd, getDragData]);
+
+        const handleOnDrop = (
+            _e: DragEvent,
+            dragData: DragData,
+            target: DropTarget
+        ) => {
+            console.log("TreeItem onDrop:", {
+                draggedId: dragData.id,
+                target,
+                item: item, // Log the current item
+            });
+
+            const dropData = getDropData ? getDropData(item) : null;
+
+            // Call the drag over callback if provided
+            if (onDragOver) {
+                onDragOver(item.id, { ...dropData, target });
+            }
+
+            // Call the original handler with a well-structured drop target
+            // that includes both the target ID and position
+            onMove?.(dragData.id, {
+                id: item.id,
+                position: target.position || "inside",
+                data: dropData,
+            });
         };
 
         const renderTreeItem = ({
@@ -174,14 +272,7 @@ export const TreeItem = memo(
                         "after",
                         ...(item.canDrop ? ["inside" as DropPosition] : []),
                     ]}
-                    onDrop={(_e, dragData, target) => {
-                        console.log("TreeItem onDrop:", {
-                            draggedId: dragData.id,
-                            target,
-                            item: item, // Log the current item
-                        });
-                        onMove?.(dragData.id, target);
-                    }}
+                    onDrop={handleOnDrop}
                     renderElement={renderTreeItem}
                     elementRef={itemRef}
                     {...props}
@@ -196,6 +287,11 @@ export const TreeItem = memo(
                             level={level + 1}
                             selectionManager={selectionManager}
                             onMove={onMove}
+                            onDragStart={onDragStart}
+                            onDragOver={onDragOver}
+                            onDragEnd={onDragEnd}
+                            getDragData={getDragData}
+                            getDropData={getDropData}
                             className={`tree-item-${child.id.replace(
                                 /[^a-zA-Z0-9-_]/g,
                                 "-"
