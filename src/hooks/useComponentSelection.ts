@@ -10,6 +10,7 @@ import { useUIStore } from "@/store/uiStore";
 import { useCallback, useEffect, useState, MouseEvent } from "react";
 import eventBus from "@/core/eventBus/eventBus";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
+import { useEventSubscription } from "./useEventBus";
 
 /**
  * Selection info interface containing detailed component info
@@ -91,28 +92,28 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
     }, [selectedComponentId, selectedWidgetId]);
 
     // Listen for component info events if enabled
-    useEffect(() => {
-        if (!listenToInfoEvents) return;
+    const handleComponentInfo = useCallback((event: any) => {
+        const info = event.data;
 
-        // Subscribe to component info events through eventBus
-        const subscriptionId = eventBus.subscribe('component:info', (event) => {
-            const info = event.data;
+        if (info && info.componentId === selectedComponentId) {
+            setSelectionInfo(prev => ({
+                ...prev,
+                instanceId: info.instanceId,
+                type: info.type,
+                instance: info.instance
+            }));
+        }
+    }, [selectedComponentId]);
 
-            if (info && info.componentId === selectedComponentId) {
-                setSelectionInfo(prev => ({
-                    ...prev,
-                    instanceId: info.instanceId,
-                    type: info.type,
-                    instance: info.instance
-                }));
-            }
-        });
-
-        // Clean up subscription
-        return () => {
-            eventBus.unsubscribe(subscriptionId);
-        };
-    }, [listenToInfoEvents, selectedComponentId]);
+    // Only subscribe if enabled
+    if (listenToInfoEvents) {
+        useEventSubscription(
+            'component:info',
+            handleComponentInfo,
+            [handleComponentInfo],
+            'ComponentSelectionInfo'
+        );
+    }
 
     /**
      * Select a component within a widget

@@ -3,13 +3,14 @@
  * Central service that coordinates all widget and component operations across the application.
  * This service is the single source of truth for component creation, manipulation, and deletion.
  */
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { ComponentConfig } from "@/core/base/ComponentConfig";
 import eventBus from "@/core/eventBus/eventBus";
 import { EntityId } from "@/core/types/EntityTypes";
 import { Position, Size } from "@/core/types/Geometry";
 import { useWidgetStore, Widget, WidgetComponent } from "@/features/builder/stores/widgetStore";
 import { useComponentStore, useUIStore } from "@/store";
+import { useEventSubscription } from "@/hooks/useEventBus";
 
 /**
  * Result object for operations that may succeed or fail
@@ -446,20 +447,44 @@ export function createBuilderService(dependencies: BuilderDependencies) {
                             }
 
                             // Notify about the cross-widget move
+                            // 1. Main component moved event with cross-widget flag
                             eventBus.publish("component:moved", {
                                 componentId,
                                 sourceWidgetId,
                                 destinationWidgetId,
                                 parentId: newParentId,
+                                oldParentId,
                                 isCrossWidget: true,
+                                timestamp: Date.now()
                             });
 
+                            // 2. Source widget hierarchy changed event
                             eventBus.publish("hierarchy:changed", {
                                 widgetId: sourceWidgetId,
+                                action: "component-moved",
+                                componentId,
+                                timestamp: Date.now()
                             });
 
+                            // 3. Destination widget hierarchy changed event
                             eventBus.publish("hierarchy:changed", {
                                 widgetId: destinationWidgetId,
+                                action: "component-moved",
+                                componentId,
+                                timestamp: Date.now()
+                            });
+
+                            // 4. Additional widget updated events for UI refresh
+                            eventBus.publish("widget:updated", {
+                                widgetId: sourceWidgetId,
+                                action: "hierarchy-updated",
+                                timestamp: Date.now()
+                            });
+
+                            eventBus.publish("widget:updated", {
+                                widgetId: destinationWidgetId,
+                                action: "hierarchy-updated",
+                                timestamp: Date.now()
                             });
 
                             return true;
@@ -491,33 +516,72 @@ export function createBuilderService(dependencies: BuilderDependencies) {
                         uiStore.getState().selectComponent(componentId, targetWidgetId);
                     }
 
-                    // Notify about the move
+                    // Handle cross-widget vs. same-widget events differently
                     if (isCrossWidgetMove) {
+                        // 1. Cross-widget move component event
                         eventBus.publish("component:moved", {
                             componentId,
                             sourceWidgetId,
                             destinationWidgetId,
                             parentId: newParentId,
+                            oldParentId,
                             isCrossWidget: true,
+                            timestamp: Date.now()
                         });
 
+                        // 2. Source widget hierarchy changed event
                         eventBus.publish("hierarchy:changed", {
                             widgetId: sourceWidgetId,
+                            action: "component-moved",
+                            componentId,
+                            timestamp: Date.now()
                         });
 
+                        // 3. Destination widget hierarchy changed event
                         eventBus.publish("hierarchy:changed", {
                             widgetId: destinationWidgetId,
+                            action: "component-moved",
+                            componentId,
+                            timestamp: Date.now()
+                        });
+
+                        // 4. Additional widget updated events
+                        eventBus.publish("widget:updated", {
+                            widgetId: sourceWidgetId,
+                            action: "hierarchy-updated",
+                            timestamp: Date.now()
+                        });
+
+                        eventBus.publish("widget:updated", {
+                            widgetId: destinationWidgetId,
+                            action: "hierarchy-updated",
+                            timestamp: Date.now()
                         });
                     } else {
+                        // Same-widget move events
+
+                        // 1. Standard component moved event
                         eventBus.publish("component:moved", {
                             componentId,
                             widgetId: sourceWidgetId,
                             oldParentId,
                             newParentId,
+                            timestamp: Date.now()
                         });
 
+                        // 2. Hierarchy changed event
                         eventBus.publish("hierarchy:changed", {
                             widgetId: sourceWidgetId,
+                            action: "component-moved",
+                            componentId,
+                            timestamp: Date.now()
+                        });
+
+                        // 3. Widget updated event
+                        eventBus.publish("widget:updated", {
+                            widgetId: sourceWidgetId,
+                            action: "hierarchy-updated",
+                            timestamp: Date.now()
                         });
                     }
 
@@ -932,8 +996,21 @@ export function createBuilderService(dependencies: BuilderDependencies) {
 
                     stats.widgetsUpdated++;
 
-                    // Notify about hierarchy change
-                    eventBus.publish("hierarchy:changed", { widgetId });
+                    // Always publish hierarchy changed event with a unique timestamp
+                    // to ensure it's picked up by subscribers
+                    eventBus.publish("hierarchy:changed", {
+                        widgetId,
+                        timestamp: Date.now(),
+                        action: "hierarchy-rebuilt",
+                        componentsModified: stats.componentsReordered
+                    });
+
+                    // Also publish widget:updated with a specific hierarchy action
+                    eventBus.publish("widget:updated", {
+                        widgetId,
+                        action: "hierarchy-updated",
+                        timestamp: Date.now()
+                    });
                 }
 
                 return {
@@ -1121,40 +1198,47 @@ function isCircularReference(
  * Hook to set up component event handlers using eventBus
  */
 export function useBuilderServiceEventHandlers() {
-    useEffect(() => {
-        // Subscribe to component delete events
-        const deleteSubscriptionId = eventBus.subscribe('component:deleted', (event) => {
-            const { componentId, widgetId } = event.data;
+    // Define handler for component deletion
+    const handleComponentDeleted = useCallback((event: any) => {
+        const { componentId, widgetId } = event.data;
 
-            if (componentId && widgetId) {
-                builderService.deleteComponent(widgetId, componentId);
-            }
-        });
-
-        // Subscribe to component info requests
-        const infoSubscriptionId = eventBus.subscribe('component:getInfo', (event) => {
-            const { componentId, widgetId } = event.data;
-
-            if (componentId && widgetId) {
-                const info = builderService.getComponentInfo(widgetId, componentId);
-
-                // Publish the response with eventBus
-                eventBus.publish('component:info', {
-                    componentId,
-                    widgetId,
-                    instanceId: info?.instanceId,
-                    type: info?.type,
-                    instance: info?.instance
-                });
-            }
-        });
-
-        // Clean up subscriptions
-        return () => {
-            eventBus.unsubscribe(deleteSubscriptionId);
-            eventBus.unsubscribe(infoSubscriptionId);
-        };
+        if (componentId && widgetId) {
+            builderService.deleteComponent(widgetId, componentId);
+        }
     }, []);
+
+    // Define handler for component info requests
+    const handleComponentInfoRequest = useCallback((event: any) => {
+        const { componentId, widgetId } = event.data;
+
+        if (componentId && widgetId) {
+            const info = builderService.getComponentInfo(widgetId, componentId);
+
+            // Publish the response with eventBus
+            eventBus.publish('component:info', {
+                componentId,
+                widgetId,
+                instanceId: info?.instanceId,
+                type: info?.type,
+                instance: info?.instance
+            });
+        }
+    }, []);
+
+    // Use the subscription hook to handle subscriptions and cleanup
+    useEventSubscription(
+        'component:deleted',
+        handleComponentDeleted,
+        [handleComponentDeleted],
+        'BuilderService-DeleteHandler'
+    );
+
+    useEventSubscription(
+        'component:getInfo',
+        handleComponentInfoRequest,
+        [handleComponentInfoRequest],
+        'BuilderService-InfoRequestHandler'
+    );
 }
 
 export const builderService = createBuilderService({

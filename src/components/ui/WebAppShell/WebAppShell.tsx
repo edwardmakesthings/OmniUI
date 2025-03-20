@@ -12,7 +12,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Canvas } from "@/features/builder/components";
 // import ContainerExamples from "@/components/examples/CombinedExamples";
 import { initializeCoreSystem } from "@/core";
-import { DevResetButton } from "@/store/utils";
+import DebugPanel from "@/components/debug/DebugPanel";
 
 /**
  * Main application shell that manages the layout and positioning of panels
@@ -47,6 +47,7 @@ const WebAppShell: React.FC = () => {
                     {/* w-screen h-screen are for Canvas */}
                     {/* Main Canvas Area */}
                     <Canvas />
+                    <DebugPanel />
                     {/* <ContainerExamples /> */}
                     {/* Left Panel Group */}
                     <div className="grid fixed top-0 left-0 bottom-0 z-50 h-screen">
@@ -59,7 +60,6 @@ const WebAppShell: React.FC = () => {
                     <div className="fixed top-0 right-0 bottom-0 z-50 max-h-screen">
                         {/* <PropertyEditorPanel /> */}
                     </div>
-                    <DevResetButton />
                     {/* Modal Container - all app modals are rendered here */}
                     <ModalContainer />
                 </div>

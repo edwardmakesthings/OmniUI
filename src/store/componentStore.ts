@@ -15,6 +15,7 @@ import { nanoid } from 'nanoid';
 import { ComponentConfig } from '@/core/base/ComponentConfig';
 import { BaseState, defaultState } from '@/components/base/interactive';
 import { useMemo } from 'react';
+import eventBus from '@/core/eventBus/eventBus';
 
 /**
  * Interface for the component store operations
@@ -242,10 +243,36 @@ export const useComponentStore = create<ComponentStore>()(
                 const instance = state.instances[id];
 
                 if (!instance) {
+                    // Publish an event about the missing instance
+                    eventBus.publish("component:instanceNotFound", {
+                        instanceId: id,
+                        timestamp: Date.now()
+                    });
+
                     throw new StoreError(
                         `No instance found for ID: ${id}`,
                         'INSTANCE_NOT_FOUND'
                     );
+                }
+
+                // Validate the instance to ensure it has all required properties
+                const isValid = validateInstance(instance);
+
+                if (!isValid) {
+                    console.warn(`Instance ${id} is incomplete or corrupted, attempting repair`);
+
+                    // Try to repair the instance by ensuring required fields
+                    const repairedInstance = repairInstance(instance);
+
+                    // Update the instance in the store
+                    set(state => ({
+                        instances: {
+                            ...state.instances,
+                            [id]: repairedInstance
+                        }
+                    }));
+
+                    return repairedInstance;
                 }
 
                 return instance;
@@ -480,6 +507,60 @@ export const useComponentStore = create<ComponentStore>()(
         }
     )
 );
+
+// Helper to validate an instance has all required properties
+const validateInstance = (instance: any): boolean => {
+    // Check essential properties exist
+    if (!instance.id || !instance.definitionId) {
+        return false;
+    }
+
+    // Check metadata
+    if (!instance.metadata || typeof instance.metadata !== 'object') {
+        return false;
+    }
+
+    // Check state
+    if (!instance.state) {
+        return false;
+    }
+
+    return true;
+};
+
+// Helper to repair corrupted instances
+const repairInstance = (instance: any): ComponentInstance => {
+    // Create a new instance with default values for any missing fields
+    const repairedInstance: ComponentInstance = {
+        ...instance,
+        id: instance.id,
+        definitionId: instance.definitionId || 'unknown',
+        state: instance.state || defaultState,
+        internalBindings: instance.internalBindings || {},
+        externalBindings: instance.externalBindings || {},
+        metadata: {
+            createdAt: instance.metadata?.createdAt || new Date(),
+            updatedAt: new Date(), // Always update
+            version: (instance.metadata?.version || 0) + 1,
+            definitionVersion: instance.metadata?.definitionVersion || 1,
+            compatibilityVersion: instance.metadata?.compatibilityVersion || 1,
+            createdBy: instance.metadata?.createdBy || 'system',
+            isUserComponent: instance.metadata?.isUserComponent || false,
+            repaired: true // Mark as repaired for debugging
+        }
+    };
+
+    // Log the repair
+    console.info(`Repaired instance ${instance.id}`);
+
+    // Notify about the repair
+    eventBus.publish("component:instanceRepaired", {
+        instanceId: instance.id,
+        timestamp: Date.now()
+    });
+
+    return repairedInstance;
+};
 
 /**
  * Hook to get a component definition by ID

@@ -5,6 +5,8 @@ import { useWidgetStore } from '@/features/builder/stores/widgetStore';
 import { useComponentStore } from '@/store/componentStore';
 import { useUIStore } from '@/store/uiStore';
 import eventBus from './eventBus/eventBus';
+import { useCallback } from 'react';
+import { useEventSubscription } from '@/hooks/useEventBus';
 
 interface InitOptions {
     resetStores?: boolean;
@@ -42,18 +44,26 @@ export async function initializeCoreSystem(options: InitOptions = {}) {
 }
 
 /**
- * Create essential event listeners for cross-component communication using eventBus
+ * Hook to create essential event listeners for cross-component communication
  */
-export function setupGlobalEventListeners() {
-    // Subscribe to widget update events and propagate to hierarchy changed events
-    eventBus.subscribe('widget:updated', (event) => {
+export function useGlobalEventListeners() {
+    // Define the handler for widget update events
+    const handleWidgetUpdate = useCallback((event: any) => {
         const { widgetId } = event.data;
 
         if (widgetId) {
             // Publish a hierarchy changed event for this widget
             eventBus.publish('hierarchy:changed', { widgetId });
         }
-    });
+    }, []);
+
+    // Use the hook to handle subscription and cleanup
+    useEventSubscription(
+        'widget:updated',
+        handleWidgetUpdate,
+        [handleWidgetUpdate],
+        'GlobalWidgetUpdateHandler'
+    );
 }
 
 /**

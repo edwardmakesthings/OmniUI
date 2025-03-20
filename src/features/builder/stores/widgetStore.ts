@@ -915,15 +915,67 @@ export const useWidgetStore = create<WidgetStore>()(
                 // Import component store dynamically to avoid circular dependencies
                 const getComponent = async (instanceId: EntityId) => {
                     try {
-                        // Try to dynamically load the component store
-                        const module = await import('@/store/componentStore');
-                        const componentStore = module.useComponentStore.getState();
-                        return componentStore.getInstance(instanceId);
-                    } catch (error) {
-                        if (debug) {
-                            console.error(`Failed to load instance ${instanceId}:`, error);
+                        // Try to dynamically load the component store with retry logic
+                        let retries = 0;
+                        const maxRetries = 3;
+                        let lastError;
+
+                        while (retries < maxRetries) {
+                            try {
+                                const module = await import('@/store/componentStore');
+                                const componentStore = module.useComponentStore.getState();
+                                const instance = componentStore.getInstance(instanceId);
+
+                                // Validate the instance to ensure it's complete
+                                if (!instance || !instance.id) {
+                                    throw new Error(`Instance ${instanceId} is invalid or incomplete`);
+                                }
+
+                                return instance;
+                            } catch (error) {
+                                lastError = error;
+                                retries++;
+
+                                // Brief delay before retry
+                                if (retries < maxRetries) {
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                }
+                            }
                         }
-                        return null;
+
+                        // All retries failed
+                        console.warn(`Failed to load instance ${instanceId} after ${maxRetries} attempts:`, lastError);
+
+                        // Instead of returning null, return a placeholder instance to prevent rendering issues
+                        return {
+                            id: instanceId,
+                            type: 'unknown',
+                            definitionId: 'unknown',
+                            label: `Missing Component (${instanceId.split('-')[0]})`,
+                            metadata: {
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                version: 0,
+                                isPlaceholder: true // Mark as placeholder for debugging
+                            }
+                        };
+                    } catch (error) {
+                        console.error(`Failed to load instance ${instanceId}:`, error);
+
+                        // Return placeholder instance
+                        return {
+                            id: instanceId,
+                            type: 'unknown',
+                            definitionId: 'unknown',
+                            label: `Error Component (${instanceId.split('-')[0]})`,
+                            metadata: {
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                version: 0,
+                                isPlaceholder: true,
+                                error: error.message
+                            }
+                        };
                     }
                 };
 
@@ -955,10 +1007,26 @@ export const useWidgetStore = create<WidgetStore>()(
                         let instance;
                         try {
                             instance = await getComponent(component.instanceId);
-                        } catch (err) {
-                            if (debug) {
-                                console.warn(`Instance not found for component ${component.id}`);
+
+                            if (!instance || instance.metadata?.isPlaceholder) {
+                                console.warn(`Using placeholder for component ${component.id}, instanceId: ${component.instanceId}`);
+                                // The getComponent function now returns a placeholder, so we don't need additional handling here
                             }
+                        } catch (err) {
+                            console.error(`Failed to get instance for component ${component.id}:`, err);
+                            instance = {
+                                id: component.instanceId,
+                                type: 'error',
+                                definitionId: component.definitionId,
+                                label: `Error: ${component.id}`,
+                                metadata: {
+                                    createdAt: new Date(),
+                                    updatedAt: new Date(),
+                                    version: 0,
+                                    isPlaceholder: true,
+                                    error: err.message
+                                }
+                            };
                         }
 
                         // Determine component type and label

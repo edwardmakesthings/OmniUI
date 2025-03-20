@@ -17,6 +17,8 @@ export type EventType =
     | 'component:reordered'
     | 'component:info'
     | 'component:getInfo'
+    | 'component:instanceNotFound'
+    | 'component:instanceRepaired'
     | 'hierarchy:changed'
     | 'widget:created'
     | 'widget:updated'

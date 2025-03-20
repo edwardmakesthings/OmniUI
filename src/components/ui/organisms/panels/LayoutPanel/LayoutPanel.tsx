@@ -343,6 +343,38 @@ const LayoutPanel = () => {
         [debouncedRefresh, forceRefresh]
     );
 
+    // Subscribe to instance repaired events
+    useEventSubscription(
+        "component:instanceRepaired",
+        (event) => {
+            console.info(
+                `Component instance repaired: ${event.data.instanceId}, refreshing hierarchy`
+            );
+
+            // Refresh but with less priority than not found
+            debouncedRefresh();
+        },
+        [debouncedRefresh]
+    );
+
+    useEventSubscription(
+        "hierarchy:changed",
+        (event) => {
+            if (
+                event.data?.action === "hierarchy-rebuilt" ||
+                event.data?.action === "component-moved"
+            ) {
+                console.info(
+                    `Hierarchy changed with action ${event.data.action}, forcing refresh`
+                );
+                forceRefresh();
+            } else {
+                debouncedRefresh();
+            }
+        },
+        [forceRefresh, debouncedRefresh]
+    );
+
     useEventSubscription(
         "component:added",
         (event) => {
