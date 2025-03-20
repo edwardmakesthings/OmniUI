@@ -246,14 +246,16 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
     // Listen for global selection events to sync up
     useEventSubscription(
         "component:selected",
-        (event) => {
-            // Check if this component was selected
-            if (event.data.componentId === componentId) {
-                // No need to call select as the parent already handled it
-                // Just refresh the UI if needed
-            }
-        },
-        [componentId]
+        useCallback(
+            (event) => {
+                if (event.data.componentId === componentId) {
+                    // Component was selected, update UI if needed
+                }
+            },
+            [componentId]
+        ),
+        [componentId],
+        `Component-${componentId}-Selection`
     );
 
     // Extract drag props
@@ -358,7 +360,7 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
                     className="absolute top-0 left-0 bg-gray-900 text-white text-xs px-1 py-0.5 rounded opacity-70 z-50"
                     style={{ fontSize: "8px", pointerEvents: "none" }}
                 >
-                    ID: {widgetComponent.id.split("-")[1]}
+                    ID: {widgetId}/{widgetComponent.id}
                     {isDragging && " (dragging)"}
                     {isSelected && " (selected)"}
                     <span className="ml-1 text-yellow-400">
@@ -371,7 +373,9 @@ export const ComponentWithDragDrop = memo(function ComponentWithDragDrop({
 });
 
 /**
- * Hook to subscribe to widget component changes using both eventBus and legacy events
+ * Hook to subscribe to all widget component changes
+ * Uses useEventSubscription for efficient subscription management
+ *
  * @param widgetId The widget ID to listen for changes
  * @param callback The callback to execute when changes occur
  */
@@ -379,50 +383,67 @@ export function useWidgetComponentChanges(
     widgetId: EntityId,
     callback: () => void
 ) {
+    // Keep callback in a ref to avoid unnecessary resubscriptions
     const callbackRef = useRef(callback);
 
-    // Keep callback ref updated
+    // Update ref when callback changes
     useEffect(() => {
         callbackRef.current = callback;
     }, [callback]);
 
-    // Set up event subscriptions
-    useEffect(() => {
-        // EventBus subscription
-        const subscriptionIds = [
-            eventBus.subscribe("widget:updated", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
-            eventBus.subscribe("hierarchy:changed", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
-            eventBus.subscribe("component:added", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
-            eventBus.subscribe("component:deleted", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
-            eventBus.subscribe("component:updated", (event) => {
-                if (event.data?.widgetId === widgetId) {
-                    callbackRef.current();
-                }
-            }),
-        ];
+    // Create a stable handler that checks widgetId
+    const handleWidgetEvent = useCallback(
+        (event: any) => {
+            if (event.data?.widgetId === widgetId) {
+                callbackRef.current();
+            }
+        },
+        [widgetId]
+    );
 
-        // Clean up
-        return () => {
-            // Clean up eventBus subscriptions
-            subscriptionIds.forEach((id) => eventBus.unsubscribe(id));
-        };
-    }, [widgetId]);
+    // Use useEventSubscription for each event type, with appropriate component name for debugging
+    useEventSubscription(
+        "widget:updated",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-Updated`
+    );
+
+    useEventSubscription(
+        "hierarchy:changed",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-Hierarchy`
+    );
+
+    useEventSubscription(
+        "component:added",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-ComponentAdded`
+    );
+
+    useEventSubscription(
+        "component:deleted",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-ComponentDeleted`
+    );
+
+    useEventSubscription(
+        "component:updated",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-ComponentUpdated`
+    );
+
+    // Optional: Add component:moved subscription if you need it
+    useEventSubscription(
+        "component:moved",
+        handleWidgetEvent,
+        [widgetId, handleWidgetEvent],
+        `Widget-${widgetId}-ComponentMoved`
+    );
 }
 
 export default ComponentWithDragDrop;

@@ -185,6 +185,36 @@ const LayoutPanel = () => {
         [getDragData]
     );
 
+    // Create Widget icon fallback
+    const SafeWidgetIcon = useMemo(() => {
+        // Try icon from component map
+        const IconFromMap = componentIconMap?.Widget as
+            | ComponentType<IconProps>
+            | undefined;
+
+        if (IconFromMap && typeof IconFromMap === "function") {
+            return IconFromMap;
+        }
+
+        if (WidgetIcon && typeof WidgetIcon === "function") {
+            return WidgetIcon;
+        }
+
+        // Fallback
+        return (props: IconProps) => (
+            <div
+                style={{
+                    width: props.size || 16,
+                    height: props.size || 16,
+                    backgroundColor: "currentColor",
+                    borderRadius: 2,
+                    opacity: 0.5,
+                }}
+                {...props}
+            />
+        );
+    }, []);
+
     /**
      * Handle TreeView item moves by synchronizing the widget store with the updated tree structure.
      * This directly rebuilds the component hierarchy from the TreeView data.
@@ -437,72 +467,51 @@ const LayoutPanel = () => {
         const fetchHierarchies = async () => {
             try {
                 const widgetStore = useWidgetStore.getState();
+                const results = [];
 
-                const hierarchies = await Promise.all(
-                    widgets.map(async (widget) => {
-                        try {
-                            const hierarchy =
-                                await widgetStore.getComponentHierarchy(
-                                    widget.id,
-                                    { debug: false } // Only enable debug when needed
-                                );
-                            return hierarchy[0] || null;
-                        } catch (error) {
-                            console.error(
-                                `Error fetching hierarchy for widget ${widget.id}:`,
-                                error
+                // Process each widget individually with error handling
+                for (const widget of widgets) {
+                    try {
+                        const hierarchy =
+                            await widgetStore.getComponentHierarchy(
+                                widget.id,
+                                { debug: false } // Only enable debug when needed
                             );
-                            return null;
+
+                        if (hierarchy && hierarchy.length > 0) {
+                            results.push(hierarchy[0]);
                         }
-                    })
-                );
+                    } catch (error) {
+                        console.error(
+                            `Error fetching hierarchy for widget ${widget.id}:`,
+                            error
+                        );
 
-                const validHierarchies = hierarchies.filter((h) => h !== null);
+                        // Add a fallback hierarchy instead of failing
+                        results.push({
+                            id: widget.id,
+                            type: "Widget",
+                            label: widget.label || "Widget",
+                            icon: SafeWidgetIcon,
+                            canDrop: true,
+                            canDrag: false,
+                            children: [],
+                        });
+                    }
+                }
 
-                if (
-                    validHierarchies.length > 0 ||
-                    hierarchyDataRef.current.length > 0
-                ) {
-                    hierarchyDataRef.current = validHierarchies;
+                if (results.length > 0 || hierarchyDataRef.current.length > 0) {
+                    hierarchyDataRef.current = results;
                     setForceRender((prev) => prev + 1);
                 }
             } catch (error) {
                 console.error("Error fetching hierarchies:", error);
+                // Don't update hierarchy data on error, keep existing data
             }
         };
 
         fetchHierarchies();
-    }, [widgets, forceRender]);
-
-    // Create Widget icon fallback
-    const SafeWidgetIcon = useMemo(() => {
-        // Try icon from component map
-        const IconFromMap = componentIconMap?.Widget as
-            | ComponentType<IconProps>
-            | undefined;
-
-        if (IconFromMap && typeof IconFromMap === "function") {
-            return IconFromMap;
-        }
-
-        if (WidgetIcon && typeof WidgetIcon === "function") {
-            return WidgetIcon;
-        }
-
-        // Fallback
-        return (props: IconProps) => (
-            <div
-                style={{
-                    width: props.size || 16,
-                    height: props.size || 16,
-                    backgroundColor: "currentColor",
-                    borderRadius: 2,
-                    opacity: 0.5,
-                }}
-                {...props}
-            />
-        );
-    }, []);
+    }, [widgets, forceRender, SafeWidgetIcon]);
 
     // Build tree data
     const treeData = useMemo(() => {

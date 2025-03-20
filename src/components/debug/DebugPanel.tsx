@@ -88,9 +88,6 @@ const DebugPanel: React.FC = () => {
 
             // Refresh stats
             setTimeout(collectStats, 100);
-            alert(
-                "Emergency reset completed. Refresh the page if issues persist."
-            );
         }
     }, [clearAllSubscriptions, collectStats]);
 

@@ -236,18 +236,42 @@ export const useComponentStore = create<ComponentStore>()(
              * Retrieves a component instance from the store by its ID.
              * @param id - The ID of the instance to retrieve
              * @returns The component instance
-             * @throws {StoreError} If no instance is found with the given ID
+             * @throws {StoreError} If no instance is found with the given ID and can't be repaired
              */
             getInstance: (id) => {
                 const state = get();
                 const instance = state.instances[id];
 
                 if (!instance) {
+                    // Try to find instance by partial ID match as a fallback
+                    const matchedId = findInstanceByPartialId(id, state.instances);
+
+                    if (matchedId) {
+                        console.warn(`Instance ${id} not found, but found similar instance ${matchedId}`);
+                        return state.instances[matchedId];
+                    }
+
                     // Publish an event about the missing instance
                     eventBus.publish("component:instanceNotFound", {
                         instanceId: id,
                         timestamp: Date.now()
                     });
+
+                    // Try to find a similar instance by definition or type
+                    const reconstructedInstance = tryReconstructInstance(id, state);
+                    if (reconstructedInstance) {
+                        console.info(`Reconstructed instance ${id} from similar instances`);
+
+                        // Add the reconstructed instance to the store
+                        set(state => ({
+                            instances: {
+                                ...state.instances,
+                                [id]: reconstructedInstance
+                            }
+                        }));
+
+                        return reconstructedInstance;
+                    }
 
                     throw new StoreError(
                         `No instance found for ID: ${id}`,
@@ -561,6 +585,117 @@ const repairInstance = (instance: any): ComponentInstance => {
 
     return repairedInstance;
 };
+
+/**
+ * Try to find an instance by a partial ID match
+ * Useful for when IDs are mangled or partially matched
+ */
+function findInstanceByPartialId(partialId: EntityId, instances: Record<EntityId, any>): EntityId | null {
+    // Try exact lookup first (already handled by the caller, but for completeness)
+    if (instances[partialId]) {
+        return partialId;
+    }
+
+    // If the ID format includes a hyphen (e.g., "prefix-actualId"),
+    // check if any instance matches the part after the hyphen
+    if (partialId.includes('-')) {
+        const idSuffix = partialId.split('-')[1];
+        // Lowercase for case-insensitive matching
+        const lowerSuffix = idSuffix.toLowerCase();
+
+        // Find instances with matching suffix or partial ID
+        for (const id in instances) {
+            const lowerInstanceId = id.toLowerCase();
+            if (lowerInstanceId.endsWith(lowerSuffix) || lowerInstanceId.includes(lowerSuffix)) {
+                return id as EntityId;
+            }
+        }
+    }
+
+    // Check for general partial matches (case insensitive)
+    const lowerPartialId = partialId.toLowerCase();
+    for (const id in instances) {
+        if (id.toLowerCase().includes(lowerPartialId)) {
+            return id as EntityId;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Attempt to reconstruct an instance based on similar instances
+ * or using the component definition
+ */
+function tryReconstructInstance(id: EntityId, state: ComponentState): ComponentInstance | null {
+    try {
+        // Use the ID to try to determine the definition ID or type
+        let definitionId: EntityId | undefined;
+        let componentType: string | undefined;
+
+        // Check if the ID contains information we can use
+        if (id.includes('panel') || id.includes('Panel')) {
+            componentType = 'Panel';
+        } else if (id.includes('button') || id.includes('Button')) {
+            componentType = 'PushButton';
+        } else if (id.includes('input') || id.includes('Input')) {
+            componentType = 'Input';
+        }
+
+        // Find a definition based on the type
+        if (componentType) {
+            const matchingDef = Object.values(state.definitions).find(def =>
+                def.type === componentType
+            );
+            if (matchingDef) {
+                definitionId = matchingDef.id;
+            }
+        }
+
+        // If we have a definition ID, create a new instance from it
+        if (definitionId) {
+            const definition = state.definitions[definitionId];
+            if (!definition) return null;
+
+            const instance: ComponentInstance = {
+                id,
+                definitionId,
+                type: definition.type,
+                label: `Recovered ${definition.type}`,
+                name: `recovered${definition.type}`,
+                state: defaultState,
+                visible: true,
+                enabled: true,
+                internalBindings: {},
+                externalBindings: {},
+                overrides: {},
+                metadata: {
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    version: 1,
+                    definitionVersion: definition.metadata.definitionVersion,
+                    compatibilityVersion: definition.metadata.compatibilityVersion,
+                    createdBy: definition.metadata.createdBy,
+                    isUserComponent: definition.metadata.isUserComponent,
+                    reconstructed: true
+                }
+            };
+
+            // Notify about reconstruction
+            eventBus.publish("component:instanceReconstructed", {
+                instanceId: id,
+                definitionId,
+                timestamp: Date.now()
+            });
+
+            return instance;
+        }
+    } catch (error) {
+        console.error(`Error reconstructing instance ${id}:`, error);
+    }
+
+    return null;
+}
 
 /**
  * Hook to get a component definition by ID
