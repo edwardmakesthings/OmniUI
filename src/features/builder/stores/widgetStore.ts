@@ -1208,6 +1208,8 @@ export const useWidgetStore = create<WidgetStore>()(
                             instanceType === 'Panel' ||
                             instanceType === 'ScrollBox' ||
                             instanceType === 'Drawer' ||
+                            instanceType === 'Modal' ||
+                            instanceType === 'DropdownPanel' ||
                             instanceType === 'Tabs';
 
                         // Process children with error handling

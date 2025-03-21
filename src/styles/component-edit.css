@@ -169,7 +169,13 @@
 
 /* Container component styling */
 [data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
-[data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
+[data-widget-id][data-edit-mode="true"]
+    [data-component-type="ScrollBox"]
+    [data-widget-id][data-edit-mode="true"]
+    [data-component-type="DropdownPanel"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Drawer"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Modal"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Tabs"] {
     min-height: 80px;
     width: 100% !important;
 }
@@ -385,6 +391,10 @@
 /* Make sure non-container selection is very visible */
 [data-selected="true"]:not([data-component-type="Panel"]):not(
         [data-component-type="ScrollBox"]
+    ):not([data-component-type="Drawer"]):not(
+        [data-component-type="Modal"]
+    ):not([data-component-type="DropdownPanel"]):not(
+        [data-component-type="Tabs"]
     ) {
     background-color: rgba(59, 130, 246, 0.1) !important;
 }

@@ -636,6 +636,26 @@ function tryReconstructInstance(id: EntityId, state: ComponentState): ComponentI
         // Check if the ID contains information we can use
         if (id.includes('panel') || id.includes('Panel')) {
             componentType = 'Panel';
+        } else if (id.includes('drawer') || id.includes('Drawer')) {
+            componentType = 'Drawer';
+        } else if (id.includes('modal') || id.includes('Modal')) {
+            componentType = 'Modal';
+        } else if (id.includes('dropdownPanel') || id.includes('DropdownPanel')) {
+            componentType = 'DropdownPanel';
+        } else if (id.includes('tabs') || id.includes('Tabs')) {
+            componentType = 'Tabs';
+        } else if (id.includes('iconButton') || id.includes('IconButton')) {
+            componentType = 'IconButton';
+        } else if (id.includes('dropdownButton') || id.includes('DropdownButton')) {
+            componentType = 'DropdownButton';
+        } else if (id.includes('dropdownSelect') || id.includes('DropdownSelect')) {
+            componentType = 'DropdownSelect';
+        } else if (id.includes('listView') || id.includes('ListView')) {
+            componentType = 'ListView';
+        } else if (id.includes('treeView') || id.includes('TreeView')) {
+            componentType = 'TreeView';
+        } else if (id.includes('label') || id.includes('Label')) {
+            componentType = 'Label';
         } else if (id.includes('button') || id.includes('Button')) {
             componentType = 'PushButton';
         } else if (id.includes('input') || id.includes('Input')) {

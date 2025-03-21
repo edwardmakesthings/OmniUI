@@ -232,7 +232,12 @@ function renderHierarchy(
 
         // Determine if this is a container component
         const isContainer =
-            instance.type === "Panel" || instance.type === "ScrollBox";
+            instance.type === "Panel" ||
+            instance.type === "ScrollBox" ||
+            instance.type === "Drawer" ||
+            instance.type === "Modal" ||
+            instance.type === "DropdownPanel" ||
+            instance.type === "Tabs";
 
         // Get child components
         const childComponents = widget.components.filter(
@@ -285,9 +290,7 @@ function renderHierarchy(
                             className={cn(
                                 "relative",
                                 isContainer
-                                    ? instance.type === "Panel"
-                                        ? "panel-children-container"
-                                        : "scrollbox-children-container"
+                                    ? `${instance.type.toLowerCase()}-children-container`
                                     : "",
                                 "flex flex-col gap-2 p-2 min-h-[50px] w-full"
                             )}
