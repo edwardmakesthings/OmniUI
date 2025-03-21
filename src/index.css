@@ -144,7 +144,11 @@ body,
 
 /* Debug styles for development */
 .debug-layout [data-component-type="Panel"] > div,
-.debug-layout [data-component-type="ScrollBox"] > div {
+.debug-layout [data-component-type="ScrollBox"] > div,
+.debug-layout [data-component-type="DropdownPanel"] > div,
+.debug-layout [data-component-type="Drawer"] > div,
+.debug-layout [data-component-type="Modal"] > div,
+.debug-layout [data-component-type="Tabs"] > div {
     outline: 1px dashed rgba(255, 0, 0, 0.3);
 }
 
@@ -179,7 +183,13 @@ body,
 
 /* Container sizing for edit mode */
 [data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
-[data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
+[data-widget-id][data-edit-mode="true"]
+    [data-component-type="ScrollBox"]
+    [data-widget-id][data-edit-mode="true"]
+    [data-component-type="DropdownPanel"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Drawer"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Modal"],
+[data-widget-id][data-edit-mode="true"] [data-component-type="Tabs"] {
     min-height: 80px;
     width: 100% !important;
 }

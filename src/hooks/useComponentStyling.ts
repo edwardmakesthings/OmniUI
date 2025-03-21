@@ -82,13 +82,20 @@ export function useComponentStyling({
     }), [isSelected, isEditMode]);
 
     // Child container class for container components
-    const childContainerClass = useMemo(() =>
-        isContainer ? (
-            componentType === "Panel"
-                ? "panel-children-container"
-                : "scrollbox-children-container"
-        ) : "",
-        [isContainer, componentType]);
+    const childContainerClass = useMemo(() => {
+        if (!isContainer) return "";
+
+        const containerClassMap: Record<string, string> = {
+            "Panel": "panel-children-container",
+            "ScrollBox": "scrollbox-children-container",
+            "Drawer": "drawer-children-container",
+            "Modal": "modal-children-container",
+            "DropdownPanel": "dropdown-panel-children-container",
+            "Tabs": "tabs-children-container"
+        };
+
+        return containerClassMap[componentType] || "children-container";
+    }, [isContainer, componentType]);
 
     return {
         dataAttributes,

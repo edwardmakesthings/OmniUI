@@ -275,7 +275,10 @@ const LayoutPanel = () => {
                 item.canDrop !== false &&
                 (item.type === "Panel" ||
                     item.type === "ScrollBox" ||
-                    item.type === "Container");
+                    item.type === "Drawer" ||
+                    item.type === "Modal" ||
+                    item.type === "DropdownPanel" ||
+                    item.type === "Tabs");
 
             // Prevent dropping if this isn't a container component
             if (!isWidget && !canAcceptChildren) {
