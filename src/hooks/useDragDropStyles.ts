@@ -170,7 +170,13 @@ export function useDragDropStyles(styleId = 'component-drag-drop-styles'): boole
 
       /* Container component styling */
       [data-widget-id][data-edit-mode="true"] [data-component-type="Panel"],
-      [data-widget-id][data-edit-mode="true"] [data-component-type="ScrollBox"] {
+    [data-widget-id][data-edit-mode="true"]
+    [data-component-type="ScrollBox"]
+    [data-widget-id][data-edit-mode="true"]
+    [data-component-type="DropdownPanel"],
+    [data-widget-id][data-edit-mode="true"] [data-component-type="Drawer"],
+    [data-widget-id][data-edit-mode="true"] [data-component-type="Modal"],
+    [data-widget-id][data-edit-mode="true"] [data-component-type="Tabs"] {
           min-height: 80px;
           width: 100% !important;
       }

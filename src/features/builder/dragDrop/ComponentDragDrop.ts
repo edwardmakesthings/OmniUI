@@ -32,8 +32,13 @@ export class ComponentDragDrop {
         while (parent) {
             if (
                 parent.hasAttribute("data-component-type") &&
-                (parent.getAttribute("data-component-type") === "Panel" ||
-                    parent.getAttribute("data-component-type") === "ScrollBox")
+                (
+                    parent.getAttribute("data-component-type") === "Panel" ||
+                    parent.getAttribute("data-component-type") === "ScrollBox" ||
+                    parent.getAttribute("data-component-type") === "Drawer" ||
+                    parent.getAttribute("data-component-type") === "Modal" ||
+                    parent.getAttribute("data-component-type") === "DropdownPanel" ||
+                    parent.getAttribute("data-component-type") === "Tabs")
             ) {
                 depth++;
             }
@@ -121,7 +126,12 @@ export class ComponentDragDrop {
             const instance = componentStore.getInstance(instanceId);
 
             // Check component type
-            return instance.type === 'Panel' || instance.type === 'ScrollBox';
+            return instance.type === 'Panel' ||
+                instance.type === 'ScrollBox' ||
+                instance.type === 'Drawer' ||
+                instance.type === 'Modal' ||
+                instance.type === 'DropdownPanel' ||
+                instance.type === 'Tabs';
         } catch (error) {
             return false;
         }

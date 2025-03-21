@@ -10,6 +10,8 @@ import {
     AlignCenterIcon,
     AlignRightIcon,
     AlignJustifyIcon,
+    CompToggleIcon,
+    CompMenuDropdownIcon,
 } from "@/components/ui/icons";
 import {
     ButtonStrip,
@@ -118,8 +120,8 @@ export const ComponentPalette: Story = {
 
         const buttons = [
             { id: "button", icon: CompPushButtonIcon, label: "Button" },
-            { id: "menu", icon: CompPushButtonIcon, label: "Menu" },
-            { id: "toggle", icon: CompPushButtonIcon, label: "Toggle" },
+            { id: "menu", icon: CompMenuDropdownIcon, label: "Menu" },
+            { id: "toggle", icon: CompToggleIcon, label: "Toggle" },
         ];
 
         const inputs = [
