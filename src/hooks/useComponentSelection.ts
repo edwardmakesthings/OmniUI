@@ -7,7 +7,7 @@
 import { EntityId } from "@/core/types/EntityTypes";
 import { builderService } from "@/services/builderService";
 import { useUIStore } from "@/store/uiStore";
-import { useCallback, useEffect, useState, MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, MouseEvent } from "react";
 import eventBus from "@/core/eventBus/eventBus";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
 import { useEventSubscription } from "./useEventBus";
@@ -66,8 +66,28 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
         isSelected: false
     });
 
+    // Track last selection to prevent circular updates
+    const lastSelectionRef = useRef<{
+        componentId: EntityId | null,
+        widgetId: EntityId | null,
+        timestamp: number
+    }>({
+        componentId: null,
+        widgetId: null,
+        timestamp: 0
+    });
+
+    // Track if we're already in a selection operation
+    const isProcessingSelectionRef = useRef(false);
+
+    // Debounce timer reference
+    const debounceTimerRef = useRef<any>(null);
+
     // Update basic selection info when store changes
     useEffect(() => {
+        // Skip the update if we're in the middle of a selection operation
+        if (isProcessingSelectionRef.current) return;
+
         // Start with basic update
         const updates = {
             componentId: selectedComponentId,
@@ -131,41 +151,107 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
             e.stopPropagation();
         }
 
+        // Get current timestamp
+        const now = Date.now();
+
+        // Check for rapid repeated selection (debounce)
+        const lastSelection = lastSelectionRef.current;
+        if (
+            componentId === lastSelection.componentId &&
+            widgetId === lastSelection.widgetId &&
+            now - lastSelection.timestamp < 200
+        ) {
+            return;
+        }
+
         // Skip if already selected to prevent unnecessary updates
         if (componentId === selectedComponentId && widgetId === selectedWidgetId) {
             return;
         }
 
-        // Use the store's selection method
-        storeSelectComponent(componentId, widgetId, {
-            syncWithLayoutPanel,
-            openPropertyPanel
-        });
+        // Clear any pending debounce timer
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
 
-        // Set widget as active
-        widgetStore.setActiveWidget(widgetId);
+        // Set processing flag to prevent circular updates
+        isProcessingSelectionRef.current = true;
 
-        // Publish selection event
-        eventBus.publish("component:selected", {
+        // Update last selection reference
+        lastSelectionRef.current = {
             componentId,
-            widgetId
-        });
-    }, [selectedComponentId, selectedWidgetId, storeSelectComponent, widgetStore, syncWithLayoutPanel, openPropertyPanel]);
+            widgetId,
+            timestamp: now
+        };
+
+        // Use the store's selection method
+        try {
+            storeSelectComponent(componentId, widgetId, {
+                syncWithLayoutPanel,
+                openPropertyPanel
+            });
+
+            // Set widget as active
+            widgetStore.setActiveWidget(widgetId);
+
+            // Publish selection event - but with a small delay to prevent UI glitches
+            setTimeout(() => {
+                eventBus.publish("component:selected", {
+                    componentId,
+                    widgetId
+                });
+            }, 0);
+        } finally {
+            // Clear processing flag after a small delay to ensure all updates have been processed
+            debounceTimerRef.current = setTimeout(() => {
+                isProcessingSelectionRef.current = false;
+            }, 100);
+        }
+    }, [
+        selectedComponentId,
+        selectedWidgetId,
+        storeSelectComponent,
+        widgetStore,
+        syncWithLayoutPanel,
+        openPropertyPanel
+    ]);
 
     /**
-     * Deselect all components
+     * Deselect all components with debouncing
      */
     const deselect = useCallback(() => {
+        // Skip if already processing selection
+        if (isProcessingSelectionRef.current) return;
+
         const currentWidgetId = selectedWidgetId;
 
-        // Use the store's deselection method
-        storeDeselectAll();
+        // Set processing flag
+        isProcessingSelectionRef.current = true;
 
-        // Publish deselection event if there was a selected widget
-        if (currentWidgetId) {
-            eventBus.publish("component:deselected", {
-                widgetId: currentWidgetId
-            });
+        // Update last selection reference
+        lastSelectionRef.current = {
+            componentId: null,
+            widgetId: null,
+            timestamp: Date.now()
+        };
+
+        try {
+            // Use the store's deselection method
+            storeDeselectAll();
+
+            // Publish deselection event if there was a selected widget
+            if (currentWidgetId) {
+                setTimeout(() => {
+                    eventBus.publish("component:deselected", {
+                        widgetId: currentWidgetId
+                    });
+                }, 0);
+            }
+        } finally {
+            // Clear processing flag after a small delay
+            debounceTimerRef.current = setTimeout(() => {
+                isProcessingSelectionRef.current = false;
+            }, 100);
         }
     }, [selectedWidgetId, storeDeselectAll]);
 
@@ -174,19 +260,41 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
      * @param widgetId Widget ID to select
      */
     const selectWidget = useCallback((widgetId: EntityId) => {
-        // Set widget as active but don't select a component
-        widgetStore.setActiveWidget(widgetId);
+        // Skip if already processing selection
+        if (isProcessingSelectionRef.current) return;
 
-        // Clear component selection but set widget
-        storeSelectComponent(null, widgetId, {
-            syncWithLayoutPanel,
-            openPropertyPanel: false
-        });
+        // Set processing flag
+        isProcessingSelectionRef.current = true;
 
-        // Publish widget selection event
-        eventBus.publish("widget:selected", {
-            widgetId
-        });
+        // Update last selection reference
+        lastSelectionRef.current = {
+            componentId: null,
+            widgetId,
+            timestamp: Date.now()
+        };
+
+        try {
+            // Set widget as active but don't select a component
+            widgetStore.setActiveWidget(widgetId);
+
+            // Clear component selection but set widget
+            storeSelectComponent(null, widgetId, {
+                syncWithLayoutPanel,
+                openPropertyPanel: false
+            });
+
+            // Publish widget selection event with slight delay
+            setTimeout(() => {
+                eventBus.publish("widget:selected", {
+                    widgetId
+                });
+            }, 0);
+        } finally {
+            // Clear processing flag after a small delay
+            debounceTimerRef.current = setTimeout(() => {
+                isProcessingSelectionRef.current = false;
+            }, 100);
+        }
     }, [widgetStore, storeSelectComponent, syncWithLayoutPanel]);
 
     /**
@@ -196,16 +304,31 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
      */
     const handleWidgetBackgroundClick = useCallback((widgetId: EntityId, e: MouseEvent) => {
         if (e.target === e.currentTarget) {
-            // Deselect all components
-            storeDeselectAll();
+            // Skip if already processing selection
+            if (isProcessingSelectionRef.current) return;
 
-            // Set the widget as active, but with no selected component
-            widgetStore.setActiveWidget(widgetId);
+            // Set processing flag
+            isProcessingSelectionRef.current = true;
 
-            // Publish deselection event
-            eventBus.publish("component:deselected", {
-                widgetId: widgetId
-            });
+            try {
+                // Deselect all components
+                storeDeselectAll();
+
+                // Set the widget as active, but with no selected component
+                widgetStore.setActiveWidget(widgetId);
+
+                // Publish deselection event with slight delay
+                setTimeout(() => {
+                    eventBus.publish("component:deselected", {
+                        widgetId: widgetId
+                    });
+                }, 0);
+            } finally {
+                // Clear processing flag after a small delay
+                debounceTimerRef.current = setTimeout(() => {
+                    isProcessingSelectionRef.current = false;
+                }, 100);
+            }
         }
     }, [widgetStore, storeDeselectAll]);
 
@@ -229,10 +352,12 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
             const result = builderService.deleteComponent(selectedWidgetId, selectedComponentId);
 
             // Publish deletion event
-            eventBus.publish("component:deleted", {
-                componentId: selectedComponentId,
-                widgetId: selectedWidgetId
-            });
+            setTimeout(() => {
+                eventBus.publish("component:deleted", {
+                    componentId: selectedComponentId,
+                    widgetId: selectedWidgetId
+                });
+            }, 0);
 
             return result;
         }
@@ -264,11 +389,13 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
         // Delete the component
         const result = builderService.deleteComponent(widgetId, componentId);
 
-        // Publish deletion event
-        eventBus.publish("component:deleted", {
-            componentId,
-            widgetId
-        });
+        // Publish deletion event with slight delay
+        setTimeout(() => {
+            eventBus.publish("component:deleted", {
+                componentId,
+                widgetId
+            });
+        }, 0);
 
         return result;
     }, [selectedComponentId, storeDeselectAll]);
@@ -279,6 +406,15 @@ export function useComponentSelection(options: ComponentSelectionOptions = {}) {
      */
     const selectByInstanceId = useCallback((instanceId: EntityId) => {
         return builderService.selectComponentByInstanceId(instanceId);
+    }, []);
+
+    // Clean up on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+        };
     }, []);
 
     return {
