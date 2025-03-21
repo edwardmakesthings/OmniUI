@@ -8,13 +8,9 @@ import {
 import { cn } from "@/lib/utils";
 
 // Component icon mapping
-import {
-    CompPanelIcon,
-    CompScrollBoxIcon,
-    CompPushButtonIcon,
-    // CompMenuDropdownIcon,
-} from "@/components/ui/icons";
+import { CompPanelIcon } from "@/components/ui/icons";
 import { useComponentPanelDrag } from "@/features/builder/dragDrop/hooks/useComponentDrag";
+import { componentIconMap } from "@/registry";
 
 export interface ComponentThumbnailProps {
     component: ComponentDefinition;
@@ -31,7 +27,7 @@ export default function ComponentThumbnail({
     className,
 }: ComponentThumbnailProps) {
     // Get appropriate icon based on component type
-    const IconComponent = getComponentIcon(component.type);
+    const IconComponent = componentIconMap[component.type] || CompPanelIcon;
 
     const { dragProps, isDragging } = useComponentPanelDrag(
         component.id,
@@ -58,9 +54,9 @@ export default function ComponentThumbnail({
             data-component-type={component.type}
             title={component.label}
         >
-            <div className="p-2 flex flex-col items-center">
+            <div className="p-1 flex flex-col items-center">
                 <div className="w-12 h-12 flex items-center justify-center">
-                    <IconComponent size={32} />
+                    <IconComponent size={48} />
                 </div>
                 <div className="mt-1 text-sm text-center truncate w-full">
                     {component.label}
@@ -73,22 +69,4 @@ export default function ComponentThumbnail({
             </div>
         </div>
     );
-}
-
-// Helper to get icon component based on component type
-function getComponentIcon(type: string) {
-    switch (type) {
-        case "Panel":
-            return CompPanelIcon;
-        case "ScrollBox":
-            return CompScrollBoxIcon;
-        case "Button":
-            return CompPushButtonIcon;
-        case "TextInput":
-            return CompPushButtonIcon; // Use a different icon when available
-        case "Label":
-            return CompPushButtonIcon; // Use a different icon when available
-        default:
-            return CompPushButtonIcon;
-    }
 }

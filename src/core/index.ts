@@ -4,6 +4,9 @@ import { registerComponentRenderers } from '@/registry/componentRenderers';
 import { useWidgetStore } from '@/features/builder/stores/widgetStore';
 import { useComponentStore } from '@/store/componentStore';
 import { useUIStore } from '@/store/uiStore';
+import eventBus from './eventBus/eventBus';
+import { useCallback } from 'react';
+import { useEventSubscription } from '@/hooks/useEventBus';
 
 interface InitOptions {
     resetStores?: boolean;
@@ -17,11 +20,8 @@ interface InitOptions {
 export async function initializeCoreSystem(options: InitOptions = {}) {
     const { resetStores = false, registerComponents = true } = options;
 
-    console.log("Initializing core system...");
-
     // Reset stores if requested
     if (resetStores) {
-        console.log("Resetting stores...");
         useWidgetStore.getState().purgeStore();
         useComponentStore.getState().purgeStore({
             resetToDefaults: true
@@ -40,30 +40,30 @@ export async function initializeCoreSystem(options: InitOptions = {}) {
     // Load component registry
     await loadComponentRegistry();
 
-    console.log("Core system initialized");
-
     return { registry };
 }
 
 /**
- * Create essential event listeners for cross-component communication
+ * Hook to create essential event listeners for cross-component communication
  */
-export function setupGlobalEventListeners() {
-    // Widget update event listener
-    window.addEventListener('widget-updated', (e: any) => {
-        // Notify any interested components about the widget update
-        const { widgetId } = e.detail;
+export function useGlobalEventListeners() {
+    // Define the handler for widget update events
+    const handleWidgetUpdate = useCallback((event: any) => {
+        const { widgetId } = event.data;
 
-        // Find all panels that might need to know about this update
-        const panels = document.querySelectorAll('[data-panel-id]');
-        panels.forEach(panel => {
-            // Create a new event specific to each panel
-            const panelEvent = new CustomEvent('widget-hierarchy-changed', {
-                detail: { widgetId }
-            });
-            panel.dispatchEvent(panelEvent);
-        });
-    });
+        if (widgetId) {
+            // Publish a hierarchy changed event for this widget
+            eventBus.publish('hierarchy:changed', { widgetId });
+        }
+    }, []);
+
+    // Use the hook to handle subscription and cleanup
+    useEventSubscription(
+        'widget:updated',
+        handleWidgetUpdate,
+        [handleWidgetUpdate],
+        'GlobalWidgetUpdateHandler'
+    );
 }
 
 /**

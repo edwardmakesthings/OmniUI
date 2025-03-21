@@ -265,6 +265,22 @@ export const ComponentHierarchy: Story = {
                     },
                 ],
             },
+            {
+                id: "second-window",
+                label: "Second Window",
+                icon: PanelIcon,
+                canDrag: false, // Root can't be dragged
+                canDrop: true, // But can receive drops
+                children: [
+                    {
+                        id: "panel-2",
+                        label: "TitleOfPanel",
+                        icon: PanelIcon,
+                        canDrag: true,
+                        canDrop: true,
+                    },
+                ],
+            },
         ];
 
         // Single select mode since we're selecting one component at a time

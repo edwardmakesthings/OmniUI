@@ -227,7 +227,9 @@ export class ComponentDragDrop {
                     container.element as HTMLElement,
                     position.x,
                     position.y,
-                    true
+                    {
+                        priorities: [DropPosition.INSIDE, DropPosition.BEFORE, DropPosition.AFTER]
+                    }
                 )
                 : DropPosition.INSIDE);
 

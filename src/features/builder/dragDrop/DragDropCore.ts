@@ -437,15 +437,16 @@ export function useDroppable<T extends string = string>(
 
         // Get available positions
         const availablePositions = options?.positions || [DropPosition.INSIDE];
-        const isContainer = availablePositions.includes(DropPosition.INSIDE);
 
         // Calculate the position based on cursor location
         const position = dropZoneManager.calculateDropPosition(
             element,
             e.clientX,
             e.clientY,
-            isContainer,
-            availablePositions
+            {
+                orientation: element.getAttribute('data-orientation') as ('horizontal' | 'vertical') || undefined,
+                priorities: availablePositions
+            }
         );
 
         // Update drop state

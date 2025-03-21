@@ -85,11 +85,6 @@ export const Canvas = memo(function Canvas() {
     // Subscribe to widget changes using the hook
     useWidgetChanges(refreshCanvas);
 
-    // Subscribe to the event bus for widget events
-    useEventSubscription("widget:updated", refreshCanvas, [refreshCanvas]);
-    useEventSubscription("widget:created", refreshCanvas, [refreshCanvas]);
-    useEventSubscription("widget:deleted", refreshCanvas, [refreshCanvas]);
-
     /**
      * Handle background canvas click to deselect all
      */
@@ -366,6 +361,48 @@ export const Canvas = memo(function Canvas() {
         }
     }, [updateNodesFromWidgets, widgetStore]);
 
+    useEventSubscription(
+        "widget:updated",
+        refreshCanvas,
+        [refreshCanvas],
+        "Canvas-WidgetUpdated"
+    );
+    useEventSubscription(
+        "widget:created",
+        refreshCanvas,
+        [refreshCanvas],
+        "Canvas-WidgetCreated"
+    );
+    useEventSubscription(
+        "widget:deleted",
+        refreshCanvas,
+        [refreshCanvas],
+        "Canvas-WidgetDeleted"
+    );
+
+    // Add emergency reset detection
+    useEventSubscription(
+        "store:reset",
+        (event: any) => {
+            console.log("[Canvas] Detected store reset, refreshing canvas");
+
+            // Force refresh after a brief delay
+            setTimeout(() => {
+                updateNodesFromWidgets();
+
+                // Check if this was an emergency reset
+                if (event.data?.emergency) {
+                    console.log(
+                        "[Canvas] Emergency reset detected, reinitializing"
+                    );
+                    isInitialized.current = false;
+                }
+            }, 100);
+        },
+        [updateNodesFromWidgets],
+        "Canvas-StoreReset"
+    );
+
     return (
         <div
             className="w-full h-full relative canvas-container"
@@ -395,6 +432,7 @@ export const Canvas = memo(function Canvas() {
                     nodesDraggable={true}
                     elementsSelectable={true}
                     selectNodesOnDrag={false}
+                    colorMode="dark"
                 >
                     {/* Background grid */}
                     <Background
@@ -409,7 +447,7 @@ export const Canvas = memo(function Canvas() {
                     />
 
                     {/* Canvas controls */}
-                    <Controls />
+                    <Controls position="bottom-right" />
 
                     {/* Info panel */}
                     <Panel

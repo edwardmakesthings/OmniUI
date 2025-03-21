@@ -17,39 +17,40 @@ export const ComponentPanel = () => {
             <h2 className="text-lg font-bold p-2 border-b border-accent-dark-neutral">
                 Component Palette
             </h2>
+            <div className="overflow-y-auto scrollbar-custom scrollbar-dark">
+                {/* Layout Components */}
+                <DropdownPanel
+                    title="Layout"
+                    defaultOpen={true}
+                    contentLayout="grid"
+                >
+                    {layoutComponents.map((comp) => (
+                        <ComponentThumbnail key={comp.id} component={comp} />
+                    ))}
+                </DropdownPanel>
 
-            {/* Layout Components */}
-            <DropdownPanel
-                title="Layout"
-                defaultOpen={true}
-                contentLayout="grid"
-            >
-                {layoutComponents.map((comp) => (
-                    <ComponentThumbnail key={comp.id} component={comp} />
-                ))}
-            </DropdownPanel>
+                {/* Control Components */}
+                <DropdownPanel
+                    title="Control"
+                    defaultOpen={true}
+                    contentLayout="grid"
+                >
+                    {controlComponents.map((comp) => (
+                        <ComponentThumbnail key={comp.id} component={comp} />
+                    ))}
+                </DropdownPanel>
 
-            {/* Control Components */}
-            <DropdownPanel
-                title="Control"
-                defaultOpen={true}
-                contentLayout="grid"
-            >
-                {controlComponents.map((comp) => (
-                    <ComponentThumbnail key={comp.id} component={comp} />
-                ))}
-            </DropdownPanel>
-
-            {/* Display Components */}
-            <DropdownPanel
-                title="Display"
-                defaultOpen={true}
-                contentLayout="grid"
-            >
-                {displayComponents.map((comp) => (
-                    <ComponentThumbnail key={comp.id} component={comp} />
-                ))}
-            </DropdownPanel>
+                {/* Display Components */}
+                <DropdownPanel
+                    title="Display"
+                    defaultOpen={true}
+                    contentLayout="grid"
+                >
+                    {displayComponents.map((comp) => (
+                        <ComponentThumbnail key={comp.id} component={comp} />
+                    ))}
+                </DropdownPanel>
+            </div>
         </BasePanel>
     );
 };

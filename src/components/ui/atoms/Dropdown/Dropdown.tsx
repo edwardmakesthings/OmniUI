@@ -176,7 +176,7 @@ export const DropdownButton = ({
                         <CaretDownIcon
                             className={cn(
                                 "transition-transform duration-200",
-                                isOpen && "rotate-180"
+                                !isOpen && "rotate-90"
                             )}
                             aria-hidden="true"
                         />
