@@ -22,6 +22,7 @@ export type EventType =
     | 'component:instanceReconstructed'
     | 'component:instanceDeleted'
     | 'component:orphanedCleanup'
+    | 'component:systemRefreshed'
     | 'hierarchy:changed'
     | 'widget:created'
     | 'widget:updated'

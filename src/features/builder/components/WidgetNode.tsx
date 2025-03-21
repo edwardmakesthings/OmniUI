@@ -63,6 +63,12 @@ export const WidgetNode = memo(function WidgetNode({
     // Track initial width for calculating position changes
     const initialWidthRef = useRef<number>(0);
 
+    // Use a ref to track the last click time to prevent double-handling clicks
+    const lastClickTimeRef = useRef<number>(0);
+
+    // Keep track of selection operations in progress
+    const selectionInProgressRef = useRef<boolean>(false);
+
     // Handle resize start to capture which handle is being used
     const handleResizeStart = useCallback(
         (_event: any, params: any) => {
@@ -167,11 +173,22 @@ export const WidgetNode = memo(function WidgetNode({
      */
     const handleComponentAdded = useCallback(
         (newComponentId: EntityId) => {
-            // Use the centralized selection hook to select the new component
-            selection.select(newComponentId, data.id);
+            // Debounce selection operations
+            if (selectionInProgressRef.current) return;
+            selectionInProgressRef.current = true;
 
-            // Force re-render
-            refreshWidget();
+            try {
+                // Use the centralized selection hook to select the new component
+                selection.select(newComponentId, data.id);
+
+                // Force re-render
+                refreshWidget();
+            } finally {
+                // Reset selection flag after a short delay
+                setTimeout(() => {
+                    selectionInProgressRef.current = false;
+                }, 100);
+            }
         },
         [data.id, selection, refreshWidget]
     );
@@ -182,8 +199,27 @@ export const WidgetNode = memo(function WidgetNode({
      */
     const handleWidgetBackgroundClick = useCallback(
         (e: React.MouseEvent) => {
-            // Use the centralized background click handler
-            selection.handleWidgetBackgroundClick(data.id, e);
+            // Implement debouncing to prevent double-clicks and infinite loops
+            const now = Date.now();
+            if (now - lastClickTimeRef.current < 300) {
+                // Skip if clicked too quickly (prevent double handling)
+                return;
+            }
+            lastClickTimeRef.current = now;
+
+            // Skip if selection operation is already in progress
+            if (selectionInProgressRef.current) return;
+            selectionInProgressRef.current = true;
+
+            try {
+                // Use the centralized background click handler
+                selection.handleWidgetBackgroundClick(data.id, e);
+            } finally {
+                // Reset selection flag after a short delay
+                setTimeout(() => {
+                    selectionInProgressRef.current = false;
+                }, 100);
+            }
         },
         [data.id, selection]
     );
@@ -407,7 +443,24 @@ export const WidgetNode = memo(function WidgetNode({
     useEffect(() => {
         if (selected && data.id && selection.selectedWidgetId !== data.id) {
             // Use selection.selectWidget instead of direct store interaction
-            selection.selectWidget(data.id);
+            // But ensure we're debouncing here
+            const now = Date.now();
+            if (
+                now - lastClickTimeRef.current > 300 &&
+                !selectionInProgressRef.current
+            ) {
+                lastClickTimeRef.current = now;
+                selectionInProgressRef.current = true;
+
+                try {
+                    selection.selectWidget(data.id);
+                } finally {
+                    // Reset selection flag after a short delay
+                    setTimeout(() => {
+                        selectionInProgressRef.current = false;
+                    }, 100);
+                }
+            }
         }
     }, [selected, data.id, selection]);
 

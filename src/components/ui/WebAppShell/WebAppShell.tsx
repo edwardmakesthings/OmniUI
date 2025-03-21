@@ -10,7 +10,7 @@ import { ModalProvider } from "@/contexts/ModalContext";
 import ModalContainer from "@/components/ui/modals/ModalContainer";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Canvas } from "@/features/builder/components";
-import { initializeCoreSystem } from "@/core";
+import { forceRefreshSystemComponents, initializeCoreSystem } from "@/core";
 import DebugPanel from "@/components/debug/DebugPanel";
 import PanelContainer from "@/components/ui/organisms/panels/PanelContainer/PanelContainer";
 import { PanelPositionValues } from "@/core/types/UI";
@@ -43,17 +43,74 @@ const WebAppShell: React.FC = () => {
         const initializeApp = async () => {
             if (!isInitialized) {
                 try {
-                    await initializeCoreSystem({ resetStores: false });
+                    // Initialize with version checking enabled
+                    await initializeCoreSystem({
+                        resetStores: false,
+                        checkVersion: true, // Check component version
+                        registerComponents: true,
+                    });
                     console.log("Core system initialized successfully");
                     setIsInitialized(true);
                 } catch (error) {
                     console.error("Failed to initialize core system:", error);
+
+                    // If initialization fails, try a forced reset as fallback
+                    try {
+                        console.warn(
+                            "Attempting emergency reset due to initialization failure"
+                        );
+                        await initializeCoreSystem({
+                            resetStores: true,
+                            forceSystemComponentRefresh: true, // Force system component refresh
+                            registerComponents: true,
+                        });
+                        console.log(
+                            "Core system initialized successfully after emergency reset"
+                        );
+                        setIsInitialized(true);
+                    } catch (fallbackError) {
+                        console.error(
+                            "Critical failure during initialization:",
+                            fallbackError
+                        );
+                    }
                 }
             }
         };
 
         initializeApp();
     }, [isInitialized]);
+
+    // Add a debug method to window for manual system component refresh (development only)
+    useEffect(() => {
+        if (process.env.NODE_ENV !== "production") {
+            (window as any).__refreshSystemComponents = async () => {
+                try {
+                    const result = await forceRefreshSystemComponents();
+
+                    if (result) {
+                        console.log(
+                            "System components refresh complete. Reloading app..."
+                        );
+                        // Give time for events to propagate
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 500);
+                    }
+                } catch (error) {
+                    console.error(
+                        "Failed to refresh system components:",
+                        error
+                    );
+                }
+                return "Check console for results";
+            };
+
+            console.info(
+                "Development helper available: window.__refreshSystemComponents() - Use to refresh all system components"
+            );
+        }
+    }, []);
 
     return (
         <ThemeProvider defaultTheme="dark">
