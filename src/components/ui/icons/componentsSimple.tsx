@@ -70,10 +70,74 @@ export const ReferenceIcon = createIconComponent([
 
 export const LabelIcon = createIconComponent(
     <>
-        <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z" />
-        <path d="M17 17a2 2 0 0 1 -2 -2v-8h-5a2 2 0 0 0 -2 2" />
-        <path d="M7 17a2.775 2.775 0 0 0 2.632 -1.897l.368 -1.103a13.4 13.4 0 0 1 3.236 -5.236l1.764 -1.764" />
-        <path d="M10 14h5" />
+        <path d="M.7 18.71 5.38 5.07h2.3L3.64 16.79h5.82l-.62 1.92H.69Z" />
+        <path d="m15.48 6.58-1.55 4.5c.43-.38.89-.7 1.37-.92a3.4 3.4 0 0 1 1.44-.33c.76 0 1.31.18 1.66.56.34.37.5.9.5 1.58a8 8 0 0 1-.5 2.4c-.3.88-.7 1.66-1.2 2.35a5.96 5.96 0 0 1-1.72 1.62c-.65.4-1.35.6-2.1.6-.96 0-1.6-.37-1.9-1.08l-.4.85h-1.6l4.17-12.13h1.83Zm-2.07 10.95c.62 0 1.2-.26 1.7-.76.53-.51.97-1.3 1.35-2.4.38-1.1.5-1.9.36-2.4-.14-.48-.5-.73-1.07-.73-.4 0-.8.13-1.2.37-.4.25-.77.54-1.1.87l-1.4 4.05a1.33 1.33 0 0 0 1.36 1Z" />
+        <path d="m23.67 6.58-3.37 9.77c-.13.4-.1.68.08.85.18.16.47.25.86.25a6.21 6.21 0 0 0 1.47-.28l.02 1.27a6.51 6.51 0 0 1-2.4.5c-.86 0-1.46-.26-1.77-.75-.31-.49-.33-1.16-.03-2l3.33-9.6h1.8Z" />
+    </>,
+    { setFillColor: true }
+);
+
+export const DrawerIcon = createIconComponent([
+    [
+        <>
+            <path d="M20.18 2a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2h-16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16Z" />
+        </>,
+        { setStrokeColor: true, strokeLinecap: "round" },
+    ],
+    [
+        <>
+            <path d="M10.54 2v20H4.2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h6.34ZM8.7 4.85H4.05a.5.5 0 0 0 0 1H8.7a.5.5 0 0 0 0-1Zm-1 5H4.05a.5.5 0 0 0 0 1H7.7a.5.5 0 0 0 0-1Zm0 5.01H4.05a.5.5 0 0 0 0 1H7.7a.5.5 0 0 0 0-1Z" />
+        </>,
+        { setFillColor: true },
+    ],
+]);
+
+export const DropdownIcon = createIconComponent(
+    <>
+        <path d="M18.18 2a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4h-12a4 4 0 0 1-4-4V6a4 4 0 0 1 4-4h12Zm-6 15.34 6.18-9.68H6l6.18 9.68Z" />
+    </>,
+    {
+        setFillColor: true,
+    }
+);
+
+export const ModalIcon = createIconComponent(
+    <>
+        <path d="M21.2 7.55a2 2 0 0 1 2 2v5.94a2 2 0 0 1-2 2H3.16a2 2 0 0 1-2-2V9.55a2 2 0 0 1 2-2h18.06ZM4.86 11.19h5.95a.5.5 0 0 0 0-1H4.85a.5.5 0 0 0 0 1Zm0 3.67h11.39a.5.5 0 0 0 0-1H4.84a.5.5 0 0 0 0 1Z" />
+    </>,
+    {
+        setStrokeColor: true,
+        strokeLinecap: "round",
+    }
+);
+
+export const ListViewIcon = createIconComponent([
+    [
+        <>
+            <path d="M20 2.52a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-16a2 2 0 0 1 2-2h16Z" />
+            <path d="M4.94 7.86h14.43" />
+        </>,
+        { setStrokeColor: true, strokeLinecap: "round" },
+    ],
+    [
+        <>
+            <path d="M22 12.04v8.56a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8.56h20ZM4.94 17.82h14.43a.5.5 0 0 0 0-1H4.94a.5.5 0 0 0 0 1Z" />
+        </>,
+        { setFillColor: true },
+    ],
+]);
+
+export const TreeViewIcon = createIconComponent(
+    <>
+        <circle cx="18.26" cy="12.04" r="2.25" />
+        <circle cx="6.09" cy="5.15" r="2.25" />
+        <circle cx="18.26" cy="19.89" r="2.25" />
+        <path d="M6.09 7.86v4.18h9.47m-9.47 0v5.85a2 2 0 0 0 2 2h7.47" />
     </>,
     { setStrokeColor: true, strokeLinecap: "round" }
 );
+
+export const Icon = createIconComponent(<></>, {
+    setStrokeColor: true,
+    strokeLinecap: "round",
+});

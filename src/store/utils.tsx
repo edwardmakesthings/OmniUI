@@ -34,20 +34,3 @@ export function purgeAllStores(
         instanceCount,
     };
 }
-
-/**
- * Adds a development reset button to the application
- */
-export function DevResetButton() {
-    if (process.env.NODE_ENV !== "development") return null;
-
-    return (
-        <button
-            onClick={() => purgeAllStores()}
-            className="fixed bottom-4 right-4 z-50 bg-red-500 text-white px-2 py-1 text-xs rounded"
-            title="Reset all stores to defaults"
-        >
-            Reset Stores
-        </button>
-    );
-}

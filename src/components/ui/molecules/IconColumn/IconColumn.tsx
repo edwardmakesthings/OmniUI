@@ -17,7 +17,7 @@ import { useModal } from "@/contexts/ModalContext";
 const ICON_COLUMN_PANELS: EntityId[] = [
     PANEL_IDS.COMPONENT_PALETTE,
     PANEL_IDS.LAYOUT_HIERARCHY,
-    PANEL_IDS.THEME_MANAGER,
+    // PANEL_IDS.THEME_MANAGER,
 ] as const;
 
 /**

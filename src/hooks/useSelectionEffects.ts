@@ -4,9 +4,11 @@
  * This hook moves DOM manipulations out of stores and into React components.
  */
 
+import eventBus from '@/core/eventBus/eventBus';
 import { EntityId } from '@/core/types/EntityTypes';
 import { useUIStore } from '@/store/uiStore';
 import { useEffect } from 'react';
+import { useComponentSelection } from './useComponentSelection';
 
 /**
  * Options for selection effects
@@ -101,9 +103,9 @@ export function useSelectionKeyboardShortcuts() {
     const {
         selectedComponentId,
         selectedWidgetId,
-        deselectAll,
-        deleteSelectedComponent
-    } = useUIStore();
+        deselect,
+        deleteSelected
+    } = useComponentSelection();
 
     // Set up keyboard event handlers
     useEffect(() => {
@@ -118,12 +120,32 @@ export function useSelectionKeyboardShortcuts() {
 
             // ESC - Deselect all
             if (e.key === 'Escape') {
-                deselectAll();
+                deselect();
+
+                // Publish deselection event
+                if (selectedWidgetId) {
+                    eventBus.publish("component:deselected", {
+                        widgetId: selectedWidgetId
+                    });
+                }
             }
 
             // Delete/Backspace - Delete selected component
             if ((e.key === 'Delete' || e.key === 'Backspace') && selectedComponentId) {
-                deleteSelectedComponent();
+                // Store IDs before deletion
+                const compId = selectedComponentId;
+                const widgetId = selectedWidgetId;
+
+                // Delete component
+                deleteSelected();
+
+                // Publish deletion event if IDs exist
+                if (compId && widgetId) {
+                    eventBus.publish("component:deleted", {
+                        componentId: compId,
+                        widgetId: widgetId
+                    });
+                }
             }
         };
 
@@ -132,7 +154,7 @@ export function useSelectionKeyboardShortcuts() {
         return () => {
             document.removeEventListener('keydown', handleKeyDown);
         };
-    }, [selectedComponentId, selectedWidgetId, deselectAll, deleteSelectedComponent]);
+    }, [selectedComponentId, selectedWidgetId, deselect, deleteSelected]);
 }
 
 /**

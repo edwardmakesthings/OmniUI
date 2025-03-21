@@ -1,5 +1,5 @@
 import { EntityId } from "@/core/types/EntityTypes";
-import dropZoneManager, { DropPosition } from "./DropZone";
+import dropZoneManager, { DropPosition, DropZoneConfig } from "./DropZone";
 import { builderService } from "@/store";
 import eventBus from "@/core/eventBus/eventBus";
 import { useWidgetStore } from "@/features/builder/stores/widgetStore";
@@ -21,32 +21,104 @@ export interface DropTargetInfo {
 }
 
 /**
- * Manager for widget overlay operations
- * Provides centralized handling of component drag and drop within widgets
- *
- * @path src/features/builder/dragDrop/WidgetOverlayManager.ts
+ * Configuration for widget drop zones
+ */
+export interface WidgetDropZoneConfig {
+    // Widget-level config
+    widgetConfig: DropZoneConfig;
+    // Component-level config
+    componentConfig: DropZoneConfig;
+    // Container-specific config
+    containerConfig: DropZoneConfig;
+    // Cross-widget config
+    crossWidgetConfig: DropZoneConfig;
+}
+
+/**
+ * Options for configuring drop zones with additional settings
+ */
+export interface DropZoneOptions extends Partial<DropZoneConfig> {
+    // Additional options beyond DropZoneConfig
+    availablePositions?: DropPosition[];
+    isContainer?: boolean;
+    highlightClass?: string;
+}
+
+/**
+ * Manager for widget overlay system handling drop targets and drop operations
  */
 export class WidgetOverlayManager {
+    // Singleton instance
+    private static instance: WidgetOverlayManager;
+
     // Current state
     private currentTarget: DropTargetInfo | null = null;
 
+    // Default drop zone configurations
+    private dropZoneConfigs: WidgetDropZoneConfig = {
+        // Widget-level defaults (only inside)
+        widgetConfig: {
+            zones: {
+                [DropPosition.INSIDE]: { size: '100%', position: 'middle' }
+            },
+            orientation: 'vertical',
+            priorities: [DropPosition.INSIDE]
+        },
+
+        // Regular component config
+        componentConfig: {
+            zones: {
+                [DropPosition.BEFORE]: { size: '30%', position: 'start' },
+                [DropPosition.AFTER]: { size: '30%', position: 'end' },
+                [DropPosition.INSIDE]: { size: '40%', position: 'middle', requiresContainer: true }
+            },
+            orientation: 'vertical',
+            priorities: [DropPosition.INSIDE, DropPosition.BEFORE, DropPosition.AFTER]
+        },
+
+        // Container-specific config (prioritizes INSIDE)
+        containerConfig: {
+            zones: {
+                [DropPosition.BEFORE]: { size: '20%', position: 'start' },
+                [DropPosition.AFTER]: { size: '20%', position: 'end' },
+                [DropPosition.INSIDE]: { size: '60%', position: 'middle' }
+            },
+            orientation: 'vertical',
+            priorities: [DropPosition.INSIDE, DropPosition.BEFORE, DropPosition.AFTER]
+        },
+
+        // Cross-widget drop config (prefers INSIDE for cross-widget)
+        crossWidgetConfig: {
+            zones: {
+                [DropPosition.INSIDE]: { size: '100%', position: 'middle' }
+            },
+            orientation: 'vertical',
+            priorities: [DropPosition.INSIDE]
+        }
+    };
+
+    private constructor() { }
+
+    public static getInstance(): WidgetOverlayManager {
+        if (!WidgetOverlayManager.instance) {
+            WidgetOverlayManager.instance = new WidgetOverlayManager();
+        }
+        return WidgetOverlayManager.instance;
+    }
+
     /**
-     * Finds the best drop target at a given position within a widget
+     * Find the best drop target at the specified position
+     * @param widgetId The widget to search in
+     * @param x The x coordinate
+     * @param y The y coordinate
+     * @returns The drop target information
      */
     findDropTargetAtPosition(
         widgetId: EntityId,
         x: number,
         y: number
     ): DropTargetInfo {
-        // console.log(`[FindTarget] Looking for drop target at (${x}, ${y}) in widget ${widgetId}`);
-
-        // Find all components at this position
-        const components = dropZoneManager.findAllComponentsAtPosition(widgetId, x, y);
-
-        // Sort by depth - deepest first (most nested)
-        components.sort((a, b) => b.depth - a.depth);
-
-        // Enhance logging for cross-widget operations
+        // Get drag source for cross-widget detection
         const dragSource = useDragDrop.getState().dragSource;
         const isCrossWidgetDrag = dragSource?.data?.widgetId &&
             dragSource.data.widgetId !== widgetId &&
@@ -56,9 +128,14 @@ export class WidgetOverlayManager {
             console.log(`Cross-widget drag detected from ${dragSource?.data?.widgetId} to ${widgetId}`);
         }
 
+        // Find all components at this position
+        const components = dropZoneManager.findAllComponentsAtPosition(widgetId, x, y);
+
+        // Sort by depth - deepest first (most nested)
+        components.sort((a, b) => b.depth - a.depth);
+
         // If no components were found, return the widget itself as target
         if (components.length === 0) {
-            console.log(`[FindTarget] No components found, using widget as target`);
             return {
                 widgetId,
                 componentId: null,
@@ -94,7 +171,8 @@ export class WidgetOverlayManager {
                     nextTarget.id,
                     nextTarget.element as HTMLElement,
                     x, y,
-                    dragSource?.data?.widgetId
+                    dragSource?.data?.widgetId,
+                    isCrossWidgetDrag
                 );
             }
 
@@ -105,7 +183,8 @@ export class WidgetOverlayManager {
                     target.id,
                     element,
                     x, y,
-                    dragSource?.data?.widgetId
+                    dragSource?.data?.widgetId,
+                    isCrossWidgetDrag
                 );
             }
         }
@@ -119,7 +198,8 @@ export class WidgetOverlayManager {
                 target.id,
                 element,
                 x, y,
-                dragSource?.data?.widgetId
+                dragSource?.data?.widgetId,
+                isCrossWidgetDrag
             );
         }
 
@@ -132,12 +212,19 @@ export class WidgetOverlayManager {
             canDrop: true,
             isContainer: true,
             sourceWidgetId: dragSource?.data?.widgetId
-        }
+        };
     }
 
     /**
-     * Helper method to determine full drop target information
-     * Extracted to make the main method cleaner and allow for recursion
+     * Determine drop target information based on component and position
+     * @param widgetId The widget ID
+     * @param componentId The component ID
+     * @param element The component element
+     * @param x The x coordinate
+     * @param y The y coordinate
+     * @param sourceWidgetId The source widget ID if cross-widget
+     * @param isCrossWidgetDrag Whether this is a cross-widget drag
+     * @returns The drop target information
      */
     private determineDropTargetInfo(
         widgetId: EntityId,
@@ -145,7 +232,8 @@ export class WidgetOverlayManager {
         element: HTMLElement,
         x: number,
         y: number,
-        sourceWidgetId?: EntityId
+        sourceWidgetId?: EntityId,
+        isCrossWidgetDrag: boolean = false
     ): DropTargetInfo {
         // Determine if this is a container component
         const isContainer =
@@ -155,21 +243,41 @@ export class WidgetOverlayManager {
         // Get parent ID for hierarchy operations
         const parentId = element.getAttribute('data-parent-id') as EntityId | undefined;
 
+        // Select configuration based on component type and drag context
+        let dropConfig: Partial<DropZoneConfig> = {};
+
+        // For cross-widget drag operations, use special config (prefers INSIDE)
+        if (isCrossWidgetDrag) {
+            dropConfig = this.dropZoneConfigs.crossWidgetConfig;
+        }
+        // For containers, use container-specific config
+        else if (isContainer) {
+            dropConfig = this.dropZoneConfigs.containerConfig;
+        }
+        // For regular components, use standard component config
+        else {
+            dropConfig = this.dropZoneConfigs.componentConfig;
+        }
+
         // Available drop positions based on component type
         const availablePositions = isContainer
             ? [DropPosition.BEFORE, DropPosition.AFTER, DropPosition.INSIDE]
             : [DropPosition.BEFORE, DropPosition.AFTER];
 
-        // Calculate drop position using our enhanced algorithm
+        // Set up drop zone options
+        const dropOptions: DropZoneOptions = {
+            ...dropConfig,
+            availablePositions,
+            isContainer
+        };
+
+        // Calculate drop position using the enhanced dropZoneManager
         const position = dropZoneManager.calculateDropPosition(
             element,
             x,
             y,
-            isContainer,
-            availablePositions
+            dropOptions
         );
-
-        console.log(`[FindTarget] Target ${componentId} (container: ${isContainer}), position: ${position}`);
 
         return {
             widgetId,
@@ -184,7 +292,8 @@ export class WidgetOverlayManager {
     }
 
     /**
-     * Updates the current drop target and manages indicators
+     * Update the current drop target
+     * @param target The drop target info or null to clear
      */
     updateDropTarget(target: DropTargetInfo | null): void {
         // Clear existing indicators
@@ -210,35 +319,40 @@ export class WidgetOverlayManager {
                 target.element.setAttribute('data-drop-inside', 'false');
             }
 
-            // Set the new drop position
+            // Determine if this is a cross-widget operation for styling
+            const isCrossWidget = target.sourceWidgetId &&
+                target.sourceWidgetId !== target.widgetId &&
+                target.sourceWidgetId !== 'palette';
+
+            // Add a special class for cross-widget drops
+            if (isCrossWidget && target.element) {
+                target.element.classList.add('cross-widget-drop-target');
+            }
+
+            // Set the drop position using dropZoneManager
             dropZoneManager.setDropPosition(
                 target.componentId,
                 target.element,
-                target.position,
-                target.isContainer
+                target.position
             );
 
             // Also directly set the attribute for more reliable styling
             if (target.element && target.position) {
                 target.element.setAttribute(`data-drop-${target.position}`, 'true');
-            } else if (!target.componentId && target.widgetId) {
-                // Handle widget-level drop indicators if needed
-                // We could show a special indicator for the widget itself
-                const widgetElement = document.querySelector(`[data-widget-id="${target.widgetId}"]`);
-                if (widgetElement instanceof HTMLElement) {
-                    widgetElement.classList.add("widget-drop-target");
-                }
+            }
+        } else if (!target.componentId && target.widgetId) {
+            // Handle widget-level drop indicators
+            const widgetElement = document.querySelector(`[data-widget-id="${target.widgetId}"]`);
+            if (widgetElement instanceof HTMLElement) {
+                widgetElement.classList.add("widget-drop-target");
             }
         }
     }
 
     /**
-     * Enhanced clearCurrentIndicators method with aggressive cleanup
-     * for the WidgetOverlayManager, focusing on direct DOM cleanup.
+     * Clear all drop indicators
      */
     clearCurrentIndicators(): void {
-        console.log("AGGRESSIVE CLEANUP: Clearing all drop indicators and attributes");
-
         // If we have a current target, clear its indicators first
         if (this.currentTarget && this.currentTarget.componentId) {
             const element = document.querySelector(`[data-component-id="${this.currentTarget.componentId}"]`);
@@ -252,6 +366,7 @@ export class WidgetOverlayManager {
                 element.classList.remove('drop-highlight');
                 element.classList.remove('drop-target');
                 element.classList.remove('container-highlight');
+                element.classList.remove('cross-widget-drop-target');
 
                 // Reset any inline styles that might have been added
                 element.style.outline = '';
@@ -284,7 +399,8 @@ export class WidgetOverlayManager {
     }
 
     /**
-     * Clean all components in a specific widget
+     * Clean up all drop indicators in a widget
+     * @param widgetId Widget ID to clean
      */
     private cleanAllComponentsInWidget(widgetId: EntityId): void {
         // Get all components in this widget
@@ -301,6 +417,7 @@ export class WidgetOverlayManager {
                 element.classList.remove('drop-highlight');
                 element.classList.remove('drop-target');
                 element.classList.remove('container-highlight');
+                element.classList.remove('cross-widget-drop-target');
 
                 // Clear inline styles
                 element.style.outline = '';
@@ -328,7 +445,7 @@ export class WidgetOverlayManager {
     }
 
     /**
-     * Global emergency cleanup - call this for persistent indicators
+     * Emergency cleanup of all drop indicators in the DOM
      */
     globalEmergencyCleanup(): void {
         // Find and remove ALL indicator elements in the entire document
@@ -348,15 +465,20 @@ export class WidgetOverlayManager {
         });
 
         // Clear any highlight classes
-        document.querySelectorAll('.drop-highlight, .drop-target, .container-highlight').forEach(element => {
+        document.querySelectorAll('.drop-highlight, .drop-target, .container-highlight, .cross-widget-drop-target').forEach(element => {
             element.classList.remove('drop-highlight');
             element.classList.remove('drop-target');
             element.classList.remove('container-highlight');
+            element.classList.remove('cross-widget-drop-target');
         });
     }
 
     /**
-     * Handles an actual drop event based on the current target
+     * Handle an actual drop operation
+     * @param dragData Data being dragged
+     * @param dragType Type of dragged item
+     * @param position Position for the drop
+     * @returns Whether the drop was successful
      */
     handleDrop(
         dragData: any,
@@ -370,11 +492,20 @@ export class WidgetOverlayManager {
             componentId: targetComponentId,
             position: dropPosition,
             parentId: targetParentId,
-            sourceWidgetId,
+            sourceWidgetId: targetSourceWidgetId,
         } = this.currentTarget;
 
+        // Extract source widget ID from drag data with better fallbacks
+        const dataSourceWidgetId = dragData.widgetId ||
+            (dragData.data && dragData.data.widgetId);
+
+        // Use the most reliable source
+        const sourceWidgetId = dataSourceWidgetId || targetSourceWidgetId;
+
         // Determine if this is a cross-widget operation
-        const isCrossWidgetDrop = sourceWidgetId && sourceWidgetId !== destinationWidgetId && sourceWidgetId !== 'palette';
+        const isCrossWidgetDrop = (sourceWidgetId &&
+            sourceWidgetId !== destinationWidgetId &&
+            sourceWidgetId !== 'palette') ?? false;
 
         if (isCrossWidgetDrop) {
             console.log(`Processing cross-widget drop from ${sourceWidgetId} to ${destinationWidgetId}`);
@@ -383,254 +514,31 @@ export class WidgetOverlayManager {
         try {
             // Handle component definition drops (new components)
             if (dragType === "component-definition") {
-                const definitionId = dragData.definitionId || dragData.id;
-                if (!definitionId) return false;
-
-                // Drop inside container
-                if (targetComponentId && dropPosition === DropPosition.INSIDE) {
-                    const result = builderService.addChildComponent(
-                        destinationWidgetId,
-                        targetComponentId,
-                        definitionId,
-                        position || {
-                            x: { value: 10, unit: "px" },
-                            y: { value: 10, unit: "px" },
-                        }
-                    );
-
-                    if (result) {
-                        eventBus.publish("component:added", {
-                            componentId: result.id,
-                            widgetId: destinationWidgetId,
-                            parentId: targetComponentId,
-                        });
-                        return true;
-                    }
-                }
-                // Drop before/after component
-                else if (
-                    targetComponentId &&
-                    (dropPosition === DropPosition.BEFORE ||
-                        dropPosition === DropPosition.AFTER)
-                ) {
-                    // Add to widget first
-                    const result = builderService.addComponentToWidget(
-                        destinationWidgetId,
-                        definitionId,
-                        position || {
-                            x: { value: 10, unit: "px" },
-                            y: { value: 10, unit: "px" },
-                        }
-                    );
-
-                    if (result) {
-                        // Move to correct parent
-                        builderService.moveComponent(
-                            destinationWidgetId,
-                            result.id,
-                            targetParentId
-                        );
-
-                        // Reorder
-                        builderService.reorderComponents(
-                            destinationWidgetId,
-                            targetParentId || destinationWidgetId,
-                            result.id,
-                            targetComponentId,
-                            dropPosition === DropPosition.BEFORE
-                                ? "before"
-                                : "after"
-                        );
-
-                        eventBus.publish("component:added", {
-                            componentId: result.id,
-                            widgetId: destinationWidgetId,
-                            parentId: targetParentId,
-                        });
-                        return true;
-                    }
-                }
-                // Drop directly on widget
-                else if (!targetComponentId) {
-                    const result = builderService.addComponentToWidget(
-                        destinationWidgetId,
-                        definitionId,
-                        position || {
-                            x: { value: 10, unit: "px" },
-                            y: { value: 10, unit: "px" },
-                        }
-                    );
-
-                    if (result) {
-                        eventBus.publish("component:added", {
-                            componentId: result.id,
-                            widgetId: destinationWidgetId,
-                        });
-                        return true;
-                    }
-                }
+                return this.handleComponentDefinitionDrop(
+                    dragData,
+                    destinationWidgetId,
+                    targetComponentId,
+                    dropPosition,
+                    targetParentId,
+                    position
+                );
             }
             // Handle existing component drops (moving components)
             else if (dragType === "component") {
-                const sourceComponentId = dragData.id || dragData.data?.id;
-
-                // Use the source widget ID from the drag data, or from the current target
-                const actualSourceWidgetId =
-                    dragData.widgetId ||
-                    dragData.data?.widgetId ||
-                    sourceWidgetId;
-
-                if (!sourceComponentId || !actualSourceWidgetId) {
-                    console.error("Missing source component or widget ID in drag data");
-                    return false;
-                }
-
-                // Skip palette items (they aren't actual components to move)
-                if (actualSourceWidgetId === 'palette') {
-                    console.warn("Cannot move palette items - they should be added as new components");
-                    return false;
-                }
-
-                // Log the cross-widget operation with full details
-                if (actualSourceWidgetId !== destinationWidgetId) {
-                    console.log(`Cross-widget component move:
-                    Component: ${sourceComponentId}
-                    From: ${actualSourceWidgetId}
-                    To: ${destinationWidgetId}
-                    Target: ${targetComponentId || "widget root"}
-                    Position: ${dropPosition || "inside"}
-                `);
-                }
-
-                // Prevent dropping onto itself (only in same widget)
-                if (actualSourceWidgetId === destinationWidgetId && sourceComponentId === targetComponentId) {
-                    return false;
-                }
-
-                // Check for circular reference (only in same widget)
-                if (actualSourceWidgetId === destinationWidgetId &&
-                    targetComponentId &&
-                    dropPosition === DropPosition.INSIDE) {
-
-                    if (this.wouldCreateCircularReference(
-                        destinationWidgetId,
-                        sourceComponentId,
-                        targetComponentId
-                    )) {
-                        console.warn("Cannot create circular reference in component hierarchy");
-                        return false;
-                    }
-                }
-
-                // Drop inside container
-                if (targetComponentId && dropPosition === DropPosition.INSIDE) {
-                    const success = builderService.moveComponent(
-                        actualSourceWidgetId,
-                        sourceComponentId,
-                        targetComponentId, // New parent ID
-                        destinationWidgetId // Destination widget if different
-                    );
-
-                    if (success) {
-                        if (actualSourceWidgetId !== destinationWidgetId) {
-                            // Cross-widget movement
-                            eventBus.publish("component:moved", {
-                                componentId: sourceComponentId,
-                                sourceWidgetId: actualSourceWidgetId,
-                                destinationWidgetId,
-                                newParentId: targetComponentId
-                            });
-                        } else {
-                            // Same-widget movement
-                            eventBus.publish("component:updated", {
-                                componentId: sourceComponentId,
-                                widgetId: destinationWidgetId,
-                                parentId: targetComponentId,
-                            });
-                        }
-                        return true;
-                    }
-                }
-                // Drop before/after component
-                else if (
-                    targetComponentId &&
-                    (dropPosition === DropPosition.BEFORE ||
-                        dropPosition === DropPosition.AFTER)
-                ) {
-                    // First move to the right parent (possibly in a different widget)
-                    const moveSuccess = builderService.moveComponent(
-                        actualSourceWidgetId,
-                        sourceComponentId,
-                        targetParentId, // Move to the target's parent
-                        destinationWidgetId // Destination widget if different
-                    );
-
-                    if (moveSuccess) {
-                        // Then reorder within the destination widget
-                        builderService.reorderComponents(
-                            destinationWidgetId,
-                            targetParentId || destinationWidgetId,
-                            sourceComponentId,
-                            targetComponentId,
-                            dropPosition === DropPosition.BEFORE
-                                ? "before"
-                                : "after"
-                        );
-
-                        if (actualSourceWidgetId !== destinationWidgetId) {
-                            // Cross-widget movement
-                            eventBus.publish("component:moved", {
-                                componentId: sourceComponentId,
-                                sourceWidgetId: actualSourceWidgetId,
-                                destinationWidgetId,
-                                newParentId: targetParentId
-                            });
-                        } else {
-                            // Same-widget movement
-                            eventBus.publish("component:updated", {
-                                componentId: sourceComponentId,
-                                widgetId: destinationWidgetId,
-                                parentId: targetParentId,
-                            });
-                        }
-                        return true;
-                    }
-                }
-                // Drop directly on widget
-                else if (!targetComponentId) {
-                    const success = builderService.moveComponent(
-                        actualSourceWidgetId,
-                        sourceComponentId,
-                        undefined, // Move to root level
-                        destinationWidgetId // Destination widget if different
-                    );
-
-                    if (success) {
-                        if (actualSourceWidgetId !== destinationWidgetId) {
-                            // Cross-widget movement
-                            eventBus.publish("component:moved", {
-                                componentId: sourceComponentId,
-                                sourceWidgetId: actualSourceWidgetId,
-                                destinationWidgetId
-                            });
-                        } else {
-                            // Same-widget movement
-                            eventBus.publish("component:updated", {
-                                componentId: sourceComponentId,
-                                widgetId: destinationWidgetId,
-                            });
-                        }
-                        return true;
-                    }
-                }
+                return this.handleComponentDrop(
+                    dragData,
+                    destinationWidgetId,
+                    targetComponentId,
+                    dropPosition,
+                    targetParentId,
+                    sourceWidgetId,
+                    isCrossWidgetDrop
+                );
             }
 
             return false;
         } catch (error) {
-            console.error(
-                "Error handling drop in WidgetOverlayManager:",
-                error
-            );
+            console.error("Error handling drop in WidgetOverlayManager:", error);
             return false;
         } finally {
             // Always clear indicators
@@ -650,15 +558,287 @@ export class WidgetOverlayManager {
     }
 
     /**
-     * Gets the current drop target
+     * Handle dropping a component definition
+     */
+    private handleComponentDefinitionDrop(
+        dragData: any,
+        destinationWidgetId: EntityId,
+        targetComponentId: EntityId | null,
+        dropPosition: DropPosition | null,
+        targetParentId: EntityId | undefined,
+        position?: Position
+    ): boolean {
+        const definitionId = dragData.definitionId || dragData.id;
+        if (!definitionId) return false;
+
+        // Drop inside container
+        if (targetComponentId && dropPosition === DropPosition.INSIDE) {
+            const result = builderService.addChildComponent(
+                destinationWidgetId,
+                targetComponentId,
+                definitionId,
+                position || {
+                    x: { value: 10, unit: "px" },
+                    y: { value: 10, unit: "px" },
+                }
+            );
+
+            if (result) {
+                eventBus.publish("component:added", {
+                    componentId: result.id,
+                    widgetId: destinationWidgetId,
+                    parentId: targetComponentId,
+                });
+                return true;
+            }
+        }
+        // Drop before/after component
+        else if (
+            targetComponentId &&
+            (dropPosition === DropPosition.BEFORE ||
+                dropPosition === DropPosition.AFTER)
+        ) {
+            // Add to widget first
+            const result = builderService.addComponentToWidget(
+                destinationWidgetId,
+                definitionId,
+                position || {
+                    x: { value: 10, unit: "px" },
+                    y: { value: 10, unit: "px" },
+                }
+            );
+
+            if (result) {
+                // Move to correct parent
+                builderService.moveComponent(
+                    destinationWidgetId,
+                    result.id,
+                    targetParentId
+                );
+
+                // Reorder
+                builderService.reorderComponents(
+                    destinationWidgetId,
+                    targetParentId || destinationWidgetId,
+                    result.id,
+                    targetComponentId,
+                    dropPosition === DropPosition.BEFORE
+                        ? "before"
+                        : "after"
+                );
+
+                eventBus.publish("component:added", {
+                    componentId: result.id,
+                    widgetId: destinationWidgetId,
+                    parentId: targetParentId,
+                });
+                return true;
+            }
+        }
+        // Drop directly on widget
+        else if (!targetComponentId) {
+            const result = builderService.addComponentToWidget(
+                destinationWidgetId,
+                definitionId,
+                position || {
+                    x: { value: 10, unit: "px" },
+                    y: { value: 10, unit: "px" },
+                }
+            );
+
+            if (result) {
+                eventBus.publish("component:added", {
+                    componentId: result.id,
+                    widgetId: destinationWidgetId,
+                });
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Handle dropping an existing component
+     */
+    private handleComponentDrop(
+        dragData: any,
+        destinationWidgetId: EntityId,
+        targetComponentId: EntityId | null,
+        dropPosition: DropPosition | null,
+        targetParentId: EntityId | undefined,
+        sourceWidgetId: EntityId | undefined,
+        isCrossWidgetDrop: boolean
+    ): boolean {
+        // Extract component ID reliably
+        const sourceComponentId = dragData.id || (dragData.data && dragData.data.id);
+
+        // More reliable source widget ID extraction
+        const actualSourceWidgetId = dragData.widgetId ||
+            (dragData.data && dragData.data.widgetId) ||
+            sourceWidgetId;
+
+        if (!sourceComponentId || !actualSourceWidgetId) {
+            console.error("Missing source component or widget ID in drag data");
+            return false;
+        }
+
+        // Skip palette items (they aren't actual components to move)
+        if (actualSourceWidgetId === 'palette') {
+            console.warn("Cannot move palette items - they should be added as new components");
+            return false;
+        }
+
+        // Log for cross-widget operations
+        if (isCrossWidgetDrop) {
+            console.log(`Processing cross-widget component move from ${actualSourceWidgetId} to ${destinationWidgetId}`);
+            console.log("Drag data:", dragData);
+            // You could apply special handling for cross-widget drops here
+            // For example, different validation rules or notifications
+        }
+
+        // Prevent dropping onto itself (only in same widget)
+        if (!isCrossWidgetDrop && sourceComponentId === targetComponentId) {
+            console.warn("Cannot drop component onto itself");
+            return false;
+        }
+
+        // Check for circular reference (only in same widget)
+        if (!isCrossWidgetDrop &&
+            targetComponentId &&
+            dropPosition === DropPosition.INSIDE) {
+
+            if (this.wouldCreateCircularReference(
+                destinationWidgetId,
+                sourceComponentId,
+                targetComponentId
+            )) {
+                console.warn("Cannot create circular reference in component hierarchy");
+                return false;
+            }
+        }
+
+        // Drop inside container
+        if (targetComponentId && dropPosition === DropPosition.INSIDE) {
+            // We might use different options for cross-widget moves
+            const copyInstanceData = isCrossWidgetDrop; // Always copy instances in cross-widget moves
+
+            const success = builderService.moveComponent(
+                actualSourceWidgetId,
+                sourceComponentId,
+                targetComponentId, // New parent ID
+                destinationWidgetId, // Destination widget if different
+                copyInstanceData
+            );
+
+            if (success) {
+                // Use isCrossWidgetDrop to determine which event to publish
+                if (isCrossWidgetDrop) {
+                    // Cross-widget movement
+                    eventBus.publish("component:moved", {
+                        componentId: sourceComponentId,
+                        sourceWidgetId: actualSourceWidgetId,
+                        destinationWidgetId,
+                        newParentId: targetComponentId,
+                        isCrossWidget: true // Add flag for listeners
+                    });
+                } else {
+                    // Same-widget movement
+                    eventBus.publish("component:updated", {
+                        componentId: sourceComponentId,
+                        widgetId: destinationWidgetId,
+                        parentId: targetComponentId,
+                    });
+                }
+                return true;
+            }
+        }
+        // Drop before/after component
+        else if (
+            targetComponentId &&
+            (dropPosition === DropPosition.BEFORE ||
+                dropPosition === DropPosition.AFTER)
+        ) {
+            // First move to the right parent (possibly in a different widget)
+            const moveSuccess = builderService.moveComponent(
+                actualSourceWidgetId,
+                sourceComponentId,
+                targetParentId, // Move to the target's parent
+                destinationWidgetId // Destination widget if different
+            );
+
+            if (moveSuccess) {
+                // Then reorder within the destination widget
+                builderService.reorderComponents(
+                    destinationWidgetId,
+                    targetParentId || destinationWidgetId,
+                    sourceComponentId,
+                    targetComponentId,
+                    dropPosition === DropPosition.BEFORE
+                        ? "before"
+                        : "after"
+                );
+
+                if (actualSourceWidgetId !== destinationWidgetId) {
+                    // Cross-widget movement
+                    eventBus.publish("component:moved", {
+                        componentId: sourceComponentId,
+                        sourceWidgetId: actualSourceWidgetId,
+                        destinationWidgetId,
+                        newParentId: targetParentId
+                    });
+                } else {
+                    // Same-widget movement
+                    eventBus.publish("component:updated", {
+                        componentId: sourceComponentId,
+                        widgetId: destinationWidgetId,
+                        parentId: targetParentId,
+                    });
+                }
+                return true;
+            }
+        }
+        // Drop directly on widget
+        else if (!targetComponentId) {
+            const success = builderService.moveComponent(
+                actualSourceWidgetId,
+                sourceComponentId,
+                undefined, // Move to root level
+                destinationWidgetId // Destination widget if different
+            );
+
+            if (success) {
+                if (actualSourceWidgetId !== destinationWidgetId) {
+                    // Cross-widget movement
+                    eventBus.publish("component:moved", {
+                        componentId: sourceComponentId,
+                        sourceWidgetId: actualSourceWidgetId,
+                        destinationWidgetId
+                    });
+                } else {
+                    // Same-widget movement
+                    eventBus.publish("component:updated", {
+                        componentId: sourceComponentId,
+                        widgetId: destinationWidgetId,
+                    });
+                }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Get the current drop target
+     * @returns Current drop target or null
      */
     getCurrentTarget(): DropTargetInfo | null {
         return this.currentTarget;
     }
 
     /**
-     * Check if a drop operation would create a circular reference
-     * (dropping a parent into its own descendant)
+     * Check if a move would create a circular reference
      */
     wouldCreateCircularReference(
         widgetId: EntityId,
@@ -695,5 +875,5 @@ export class WidgetOverlayManager {
 }
 
 // Export singleton instance
-export const widgetOverlayManager = new WidgetOverlayManager();
+export const widgetOverlayManager = WidgetOverlayManager.getInstance();
 export default widgetOverlayManager;

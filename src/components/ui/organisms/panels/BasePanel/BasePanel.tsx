@@ -1,11 +1,10 @@
 import { PanelConfig, PanelPositionValues } from "@/core/types/UI";
-import { SizeUtils } from "@/core/types/Geometry";
-import { MeasurementUtils } from "@/core/types/Measurement";
 import { PanelName, usePanelConfig } from "@/store/uiStore";
 import { ProjectHeader } from "@/components/ui/atoms";
 import { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
-interface BasePanelProps extends PanelConfig {
+interface BasePanelProps extends Partial<PanelConfig> {
     /** Panel identifier matching PANEL_IDS in uiStore */
     panelName: PanelName;
     /** Panel content */
@@ -16,17 +15,16 @@ interface BasePanelProps extends PanelConfig {
 
 /**
  * Panel component for displaying tool panels and sidebars
+ * Simplified version that works within a PanelContainer
  * @component
+ * @path src/components/ui/organisms/panels/BasePanel/BasePanel.tsx
  */
 const BasePanel = ({
     // Store identifier
     panelName,
     // Panel configuration (optional, falls back to store)
     position,
-    floatPosition,
     isFloating,
-    size,
-    floatSize,
     isVisible,
     // Component props
     children,
@@ -39,56 +37,24 @@ const BasePanel = ({
     const config: PanelConfig = {
         ...storeConfig,
         position: position ?? storeConfig.position,
-        floatPosition: floatPosition ?? storeConfig.floatPosition,
         isFloating: isFloating ?? storeConfig.isFloating,
-        size: size ?? storeConfig.size,
-        floatSize: floatSize ?? storeConfig.floatSize,
         isVisible: isVisible ?? storeConfig.isVisible,
     };
 
     if (!config.isVisible) return null;
 
-    const baseClasses = "bg-bg-dark text-font-dark border-accent-dark-neutral";
-
-    const positionClasses = {
-        [PanelPositionValues.Left]: "border-r-3 col-start-2",
-        [PanelPositionValues.Right]: "border-l-3",
-        [PanelPositionValues.Bottom]: "border-t-3",
-    };
-
-    // Convert measurements to pixels
-    const pixelSize = MeasurementUtils.convert(config.size, "px");
-    const pixelFloatSize = config.floatSize
-        ? SizeUtils.convert(config.floatSize, "px")
-        : undefined;
-
-    const layoutStyle: React.CSSProperties = config.isFloating
-        ? {
-              left: config.floatPosition?.x.value,
-              top: config.floatPosition?.y.value,
-              width: pixelFloatSize?.width.value,
-              height: pixelFloatSize?.height.value,
-          }
-        : {
-              [config.position === PanelPositionValues.Bottom
-                  ? "height"
-                  : "width"]: pixelSize.value,
-          };
-
-    const stretchClass =
-        config.position === PanelPositionValues.Bottom
-            ? "w-screen"
-            : "h-screen";
+    const baseClasses = "bg-bg-dark text-font-dark flex flex-col w-full h-full";
 
     return (
         <div
-            className={`${baseClasses} ${
-                positionClasses[config.position]
-            } ${stretchClass} ${className}`}
-            style={layoutStyle}
+            className={cn(baseClasses, className)}
+            data-panel-name={panelName}
+            data-panel-position={config.position}
         >
             {/* Add project header if left panel */}
             {config.position === PanelPositionValues.Left && <ProjectHeader />}
+
+            {/* Panel content */}
             {children}
         </div>
     );

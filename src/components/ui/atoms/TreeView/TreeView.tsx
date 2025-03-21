@@ -10,7 +10,8 @@ import { TreeItem } from "./TreeItem";
 import { TreeItemData, TreeSelectionManager } from "./types";
 import { treeViewPreset } from "@/components/base/style/presets/treeView";
 
-export interface TreeViewProps extends Omit<DivProps<"tree">, "as"> {
+export interface TreeViewProps
+    extends Omit<DivProps<"tree">, "as" | "onDragStart" | "onDragOver"> {
     // Data
     items: TreeItemData[];
 
@@ -26,6 +27,18 @@ export interface TreeViewProps extends Omit<DivProps<"tree">, "as"> {
 
     // Movement
     onMove?: (items: TreeItemData[]) => void;
+
+    // Drag event callbacks
+    onDragStart?: (draggedId: string, data?: any) => void;
+    onDragOver?: (targetId: string, data?: any) => void;
+    onDragEnd?: (data?: any) => void;
+
+    // Extended behaviors
+    getDragData?: (item: TreeItemData) => any;
+    getDropData?: (
+        item: TreeItemData,
+        draggedItem?: TreeItemData | null
+    ) => any;
 
     // Configuration
     multiSelect?: boolean;
@@ -53,6 +66,13 @@ export const TreeView = ({
     // Movement prop
     onMove,
 
+    // Drag event callbacks
+    onDragStart,
+    onDragOver,
+    onDragEnd,
+    getDragData,
+    getDropData,
+
     // Config props
     multiSelect = false,
     maxHeight,
@@ -70,6 +90,9 @@ export const TreeView = ({
     const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(
         new Set(defaultExpandedIds)
     );
+
+    // This state tracks the currently dragged item
+    const [draggedItem, setDraggedItem] = useState<TreeItemData | null>(null);
 
     // Use controlled if provided, otherwise use internal
     const selectedIdsSet = useMemo(
@@ -139,85 +162,183 @@ export const TreeView = ({
         ]
     );
 
+    const findTreeItemById = useCallback(
+        (id: string): TreeItemData | null => {
+            const search = (items: TreeItemData[]): TreeItemData | null => {
+                for (const item of items) {
+                    if (item.id === id) {
+                        return item;
+                    }
+                    if (item.children?.length) {
+                        const found = search(item.children);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            return search(items);
+        },
+        [items]
+    );
+
+    // Enhanced drag start handler
+    const handleDragStart = useCallback(
+        (draggedId: string, data?: any) => {
+            // Find the dragged item to track it
+            const item = findTreeItemById(draggedId);
+            setDraggedItem(item);
+
+            // Call the original callback
+            if (onDragStart) {
+                onDragStart(draggedId, data);
+            }
+        },
+        [findTreeItemById, onDragStart]
+    );
+
+    // Enhanced drag end handler
+    const handleDragEnd = useCallback(
+        (data?: any) => {
+            // Clear the dragged item when drag ends
+            setDraggedItem(null);
+
+            // Call the original callback
+            if (onDragEnd) {
+                onDragEnd(data);
+            }
+        },
+        [onDragEnd]
+    );
+
+    // Enhanced getDropData wrapper
+    const enhancedGetDropData = useCallback(
+        (item: TreeItemData): any => {
+            if (getDropData) {
+                return getDropData(item, draggedItem);
+            }
+            return null;
+        },
+        [getDropData, draggedItem]
+    );
+
     // Function to handle movement of items
     const handleMove = useCallback(
         (draggedId: string, target: DropTarget) => {
             console.log("Tree handleMove:", { draggedId, target });
-            const updatedItems = [...items];
 
-            // Find the dragged item and its current parent
-            let draggedItem: TreeItemData | undefined;
-            let sourceParent: TreeItemData | undefined;
-            let sourceIndex = -1;
-
-            const findItem = (
-                items: TreeItemData[],
-                parent?: TreeItemData
-            ): boolean => {
-                for (let i = 0; i < items.length; i++) {
-                    if (items[i].id === draggedId) {
-                        draggedItem = items[i];
-                        sourceParent = parent;
-                        sourceIndex = i;
-                        return true;
-                    }
-                    if (items[i].children?.length) {
-                        if (findItem(items[i].children!, items[i])) return true;
-                    }
-                }
-                return false;
+            // Make a deep copy of the items array to avoid mutations
+            const cloneItems = (items: TreeItemData[]): TreeItemData[] => {
+                return items.map((item) => ({
+                    ...item,
+                    children: item.children
+                        ? cloneItems(item.children)
+                        : undefined,
+                }));
             };
 
-            findItem(updatedItems);
+            const updatedItems = cloneItems(items);
 
-            if (!draggedItem) return;
+            // Function to find an item by ID
+            const findItemById = (
+                items: TreeItemData[],
+                id: string,
+                parent?: TreeItemData
+            ): {
+                item?: TreeItemData;
+                parent?: TreeItemData;
+                index: number;
+                path: string[];
+            } => {
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i].id === id) {
+                        return {
+                            item: items[i],
+                            parent,
+                            index: i,
+                            path: parent ? [parent.id, id] : [id],
+                        };
+                    }
 
-            // Remove item from its current position
-            if (sourceParent) {
-                sourceParent.children!.splice(sourceIndex, 1);
-            } else {
-                updatedItems.splice(sourceIndex, 1);
+                    if (items[i].children?.length) {
+                        const result = findItemById(
+                            items[i].children!,
+                            id,
+                            items[i]
+                        );
+                        if (result.item) {
+                            return result;
+                        }
+                    }
+                }
+
+                return { index: -1, path: [] };
+            };
+
+            // Find the dragged item
+            const {
+                item: draggedItem,
+                parent: sourceParent,
+                index: sourceIndex,
+                path: sourcePath,
+            } = findItemById(updatedItems, draggedId);
+
+            // Find the target item
+            const {
+                item: targetItem,
+                parent: targetParent,
+                index: targetIndex,
+                path: targetPath,
+            } = findItemById(updatedItems, target.id);
+
+            // Validate that we found both items
+            if (!draggedItem || !targetItem) {
+                console.error("Could not find dragged or target item", {
+                    draggedId,
+                    targetId: target.id,
+                });
+                return;
             }
 
-            // Find target item and its parent
-            let targetItem: TreeItemData | undefined;
-            let targetParent: TreeItemData | undefined;
-            let targetIndex = -1;
+            // Check for circular reference
+            if (
+                sourcePath.length < targetPath.length &&
+                targetPath.includes(draggedId)
+            ) {
+                console.error("Cannot create circular reference");
+                return;
+            }
 
-            const findTarget = (
-                items: TreeItemData[],
-                parent?: TreeItemData
-            ): boolean => {
-                for (let i = 0; i < items.length; i++) {
-                    if (items[i].id === target.id) {
-                        targetItem = items[i];
-                        targetParent = parent;
-                        targetIndex = i;
-                        return true;
-                    }
-                    if (items[i].children?.length) {
-                        if (findTarget(items[i].children!, items[i]))
-                            return true;
-                    }
-                }
-                return false;
-            };
+            // Extract dragged item from source
+            let itemToMove: TreeItemData | undefined;
 
-            findTarget(updatedItems);
+            if (sourceParent) {
+                // Remove from parent's children
+                itemToMove = sourceParent.children!.splice(sourceIndex, 1)[0];
+            } else {
+                // Remove from root
+                itemToMove = updatedItems.splice(sourceIndex, 1)[0];
+            }
 
-            if (!targetItem) return;
+            if (!itemToMove) {
+                console.error("Failed to extract item to move");
+                return;
+            }
 
-            // Insert item at new position
+            // Store original parentId for item history tracking
+            itemToMove.parentId = sourceParent ? sourceParent.id : undefined;
+
+            // Insert at destination
             switch (target.position) {
                 case "before":
                     if (targetParent) {
                         targetParent.children!.splice(
                             targetIndex,
                             0,
-                            draggedItem
+                            itemToMove
                         );
                     } else {
-                        updatedItems.splice(targetIndex, 0, draggedItem);
+                        updatedItems.splice(targetIndex, 0, itemToMove);
                     }
                     break;
 
@@ -226,25 +347,31 @@ export const TreeView = ({
                         targetParent.children!.splice(
                             targetIndex + 1,
                             0,
-                            draggedItem
+                            itemToMove
                         );
                     } else {
-                        updatedItems.splice(targetIndex + 1, 0, draggedItem);
+                        updatedItems.splice(targetIndex + 1, 0, itemToMove);
                     }
                     break;
 
                 case "inside":
+                    // Ensure target item has a children array
                     targetItem.children = targetItem.children || [];
-                    targetItem.children.push(draggedItem);
+                    // Add to end of children
+                    targetItem.children.push(itemToMove);
 
-                    // Auto-expand the target when dropping inside
+                    // Auto-expand the target
                     if (!expandedIdsSet.has(targetItem.id)) {
                         selectionManager.toggleExpansion(targetItem.id);
                     }
                     break;
+
+                default:
+                    console.error("Unknown drop position", target.position);
+                    return;
             }
 
-            // Notify parent of changes
+            // Notify parent of changes with the updated structure
             console.log("Updated tree structure:", updatedItems);
             onMove?.(updatedItems);
         },
@@ -278,6 +405,23 @@ export const TreeView = ({
                         level={0}
                         selectionManager={selectionManager}
                         onMove={handleMove}
+                        onDragStart={handleDragStart}
+                        onDragOver={onDragOver}
+                        onDragEnd={handleDragEnd}
+                        getDragData={getDragData}
+                        getDropData={enhancedGetDropData}
+                        className={`tree-item-${item.id.replace(
+                            /[^a-zA-Z0-9-_]/g,
+                            "-"
+                        )}`}
+                        styleProps={{
+                            variant: "default",
+                            elements: {
+                                root: {
+                                    base: `data-tree-item-id=${item.id}`,
+                                },
+                            },
+                        }}
                     />
                 ))}
             </ScrollBox>

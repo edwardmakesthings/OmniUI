@@ -8,7 +8,8 @@ import { Measurement } from "./Measurement";
 export const PanelPositionValues = {
     Left: "left",
     Right: "right",
-    Bottom: "bottom"
+    Bottom: "bottom",
+    Top: "top"
 }
 
 export type PanelPosition = typeof PanelPositionValues[keyof typeof PanelPositionValues];

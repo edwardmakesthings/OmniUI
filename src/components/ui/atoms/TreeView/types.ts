@@ -4,6 +4,7 @@ import { IconProps } from '@/lib/icons/types';
 export interface TreeItemData {
     id: string;
     label: string;
+    type?: string;
     icon?: ComponentType<IconProps>;
     children?: TreeItemData[];
     disabled?: boolean;

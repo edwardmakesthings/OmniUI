@@ -12,7 +12,7 @@ import { persist } from "zustand/middleware";
 import { useEffect } from "react";
 import { PanelIcon, WidgetIcon } from "@/components/ui";
 import { UnitType } from "@/core/types/Measurement";
-import { componentIconMap } from "@/registry/componentRenderers";
+import { layoutComponentIconMap as componentIconMap } from "@/registry/componentRenderers";
 import eventBus from "@/core/eventBus/eventBus";
 
 // Widget display types
@@ -65,6 +65,28 @@ export interface WidgetComponent {
     };
 }
 
+export interface HierarchyNode {
+    id: string;
+    type: string;
+    label: string;
+    icon: any;
+    canDrop: boolean;
+    canDrag: boolean;
+    data?: {
+        componentId: EntityId;
+        widgetId: EntityId;
+        instanceId: EntityId;
+        definitionId: EntityId;
+    };
+    parentId?: string;
+    children: HierarchyNode[];
+};
+
+export interface ComponentDeleteOptions {
+    removeChildren?: boolean; // Whether to also remove child components
+    promoteChildren?: boolean;  // Whether to promote children to the parent's level
+};
+
 // ReactFlow node type with Widget data
 export type FlowWidgetNode = Node<Widget>;
 
@@ -95,7 +117,7 @@ export interface WidgetStore {
         componentId: EntityId,
         updates: Partial<WidgetComponent>
     ) => void;
-    removeComponent: (widgetId: EntityId, componentId: EntityId) => void;
+    removeComponent: (widgetId: EntityId, componentId: EntityId, options: ComponentDeleteOptions) => void;
 
     // Navigation/action operations
     bindComponentToWidget: (
@@ -119,7 +141,8 @@ export interface WidgetStore {
         componentId: EntityId,
         newParentId?: EntityId, // undefined means move to root
         destinationWidgetId?: EntityId, // undefined means same widget as source
-    ) => void;
+        instanceMap?: Map<EntityId, EntityId> // Map of old instance IDs to new instance IDs
+    ) => boolean;
 
     // Get component hierarchy
     getComponentHierarchy: (
@@ -139,7 +162,7 @@ export interface WidgetStore {
             definitionId: EntityId;
         };
         parentId?: string;
-        children: any[];
+        children: HierarchyNode[];
     }[]>;
 
     reorderComponents: (
@@ -474,15 +497,117 @@ export const useWidgetStore = create<WidgetStore>()(
              * Remove a component from a widget
              * @param widgetId ID of the widget containing the component
              * @param componentId ID of the component to remove
+             * @param options Options for removal behavior
              */
-            removeComponent: (widgetId, componentId) => {
+            removeComponent: (
+                widgetId: EntityId,
+                componentId: EntityId,
+                options: ComponentDeleteOptions = { removeChildren: true, promoteChildren: false }
+            ) => {
+                const { removeChildren = true, promoteChildren = false } = options;
+
                 set(state => {
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
 
-                    const updatedComponents = widget.components.filter(c => c.id !== componentId);
+                    // Find the component to be removed
+                    const componentToRemove = widget.components.find(c => c.id === componentId);
+                    if (!componentToRemove) {
+                        console.warn(`Component ${componentId} not found in widget ${widgetId}`);
+                        return state;
+                    }
 
-                    eventBus.publish("component:deleted", { widgetId, componentId });
+                    // Get the parent component ID (if any)
+                    const parentId = componentToRemove.parentId;
+
+                    // Get all direct children of this component
+                    const childComponents = widget.components.filter(c => c.parentId === componentId);
+
+                    // Create array to collect all components that should be removed
+                    const componentsToRemove: Set<EntityId> = new Set([componentId]);
+
+                    // If removing children, gather all descendants recursively
+                    if (removeChildren && !promoteChildren) {
+                        const collectDescendants = (parentCompId: EntityId) => {
+                            widget.components.forEach(comp => {
+                                if (comp.parentId === parentCompId) {
+                                    componentsToRemove.add(comp.id);
+                                    collectDescendants(comp.id);
+                                }
+                            });
+                        };
+
+                        collectDescendants(componentId);
+                    }
+
+                    // Create a new components array
+                    let updatedComponents = widget.components.filter(c => !componentsToRemove.has(c.id));
+
+                    // If promoting children instead of removing them
+                    if (promoteChildren && childComponents.length > 0) {
+                        // Update each child to use the removed component's parent
+                        updatedComponents = updatedComponents.map(comp => {
+                            if (comp.parentId === componentId) {
+                                return {
+                                    ...comp,
+                                    parentId: parentId // Move to grandparent
+                                };
+                            }
+                            return comp;
+                        });
+
+                        // If the removed component had a parent, add its children to the parent's childIds
+                        if (parentId) {
+                            const parentIndex = updatedComponents.findIndex(comp => comp.id === parentId);
+                            if (parentIndex !== -1) {
+                                // Add the child IDs to the parent's childIds
+                                updatedComponents[parentIndex] = {
+                                    ...updatedComponents[parentIndex],
+                                    childIds: [
+                                        ...updatedComponents[parentIndex].childIds,
+                                        ...childComponents.map(child => child.id)
+                                    ]
+                                };
+                            }
+                        }
+                    }
+
+                    // If the component had a parent, update the parent's childIds
+                    if (parentId) {
+                        const parentIndex = updatedComponents.findIndex(comp => comp.id === parentId);
+                        if (parentIndex !== -1) {
+                            // Remove the component from parent's childIds
+                            updatedComponents[parentIndex] = {
+                                ...updatedComponents[parentIndex],
+                                childIds: updatedComponents[parentIndex].childIds.filter(id => id !== componentId)
+                            };
+                        }
+                    }
+
+                    // Create a list of all instance IDs that were removed for logging purposes
+                    const removedInstanceIds = Array.from(componentsToRemove).map(compId => {
+                        const comp = widget.components.find(c => c.id === compId);
+                        return comp ? comp.instanceId : null;
+                    }).filter(Boolean);
+
+                    // Log the removal operation for debugging
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.info(`Removed component ${componentId} from widget ${widgetId}`);
+                        if (removedInstanceIds.length > 1) {
+                            console.info(`Also removed ${removedInstanceIds.length - 1} child components`);
+                        }
+                    }
+
+                    // Publish events for each removed component (for cleanup)
+                    removedInstanceIds.forEach(instanceId => {
+                        if (instanceId) {
+                            eventBus.publish("component:instanceDeleted", {
+                                instanceId,
+                                widgetId,
+                                timestamp: Date.now()
+                            });
+                        }
+                    });
 
                     return {
                         widgets: {
@@ -494,6 +619,12 @@ export const useWidgetStore = create<WidgetStore>()(
                         }
                     };
                 });
+
+                // Publish the main component deleted event
+                eventBus.publish("component:deleted", {
+                    componentId,
+                    widgetId
+                });
             },
 
             /**
@@ -502,11 +633,45 @@ export const useWidgetStore = create<WidgetStore>()(
              * @param componentId ID of the component to find
              * @returns The component or null if not found
              */
-            findComponent: (widgetId, componentId) => {
+            findComponent: (widgetId: EntityId, componentId: EntityId) => {
                 const widget = get().widgets[widgetId];
-                if (!widget) return null;
+                if (!widget) {
+                    console.error(`Widget ${widgetId} not found`);
+                    return null;
+                }
 
-                return widget.components.find(c => c.id === componentId) || null;
+                // First try the direct approach
+                const component = widget.components.find(c => c.id === componentId);
+                if (component) return component;
+
+                // If not found, try case-insensitive search as a fallback
+                // Sometimes IDs can get mangled or mismatched letter case
+                const lowerComponentId = componentId.toLowerCase();
+                const caseInsensitiveMatch = widget.components.find(c =>
+                    c.id.toLowerCase() === lowerComponentId
+                );
+
+                if (caseInsensitiveMatch) {
+                    console.warn(`Found component ${componentId} with case-insensitive match`);
+                    return caseInsensitiveMatch;
+                }
+
+                // If still not found, try partial match on the ID suffix
+                // This can help with widget ID prefix issues
+                if (componentId.includes('-')) {
+                    const idSuffix = componentId.split('-')[1];
+                    const suffixMatch = widget.components.find(c =>
+                        c.id.endsWith(idSuffix)
+                    );
+
+                    if (suffixMatch) {
+                        console.warn(`Found component by suffix match: ${componentId} -> ${suffixMatch.id}`);
+                        return suffixMatch;
+                    }
+                }
+
+                console.error(`Component ${componentId} not found in widget ${widgetId}`);
+                return null;
             },
 
             /**
@@ -655,204 +820,232 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
-             * Move a component within or between widgets
+             * Move a component within or between widgets with support for instance mapping
+             * This function handles moving entire component hierarchies properly.
+             *
              * @param sourceWidgetId Source widget containing the component
              * @param componentId The component to move
              * @param newParentId New parent ID or undefined for root level (optional)
              * @param destinationWidgetId Destination widget if different from source (optional)
+             * @param instanceMap Optional map from old instance IDs to new instance IDs for cross-widget moves
+             * @returns True if the move was successful, false otherwise
              */
             moveComponent: (
                 sourceWidgetId: EntityId,
                 componentId: EntityId,
-                newParentId?: EntityId, // undefined means move to root
-                destinationWidgetId?: EntityId, // undefined means same widget as source
-            ) => {
-                set(state => {
-                    // Get source widget and destination widget (same as source if not specified)
-                    const sourceWidget = state.widgets[sourceWidgetId];
-                    const destWidgetId = destinationWidgetId || sourceWidgetId;
-                    const destWidget = state.widgets[destWidgetId];
+                newParentId?: EntityId,
+                destinationWidgetId?: EntityId,
+                instanceMap?: Map<EntityId, EntityId>
+            ): boolean => {
+                // Function to log detailed debugging info
+                const logDebug = (message: string, ...args: any[]) => {
+                    if (process.env.NODE_ENV !== 'production') {
+                        console.log(`[WidgetStore] ${message}`, ...args);
+                    }
+                };
 
-                    if (!sourceWidget || !destWidget) {
-                        console.error("Source or destination widget not found");
-                        return state;
+                try {
+                    // Get source and destination widgets
+                    const sourceWidget = get().widgets[sourceWidgetId];
+                    if (!sourceWidget) {
+                        console.error(`Source widget ${sourceWidgetId} not found`);
+                        return false;
+                    }
+
+                    const destWidgetId = destinationWidgetId || sourceWidgetId;
+                    const destWidget = get().widgets[destWidgetId];
+                    if (!destWidget) {
+                        console.error(`Destination widget ${destWidgetId} not found`);
+                        return false;
                     }
 
                     // Find the component to move
                     const componentToMove = sourceWidget.components.find(c => c.id === componentId);
                     if (!componentToMove) {
                         console.error(`Component ${componentId} not found in source widget`);
-                        return state;
+                        return false;
                     }
 
-                    // For same-widget moves, check for circular reference
-                    if (destWidgetId === sourceWidgetId && newParentId) {
-                        let current = sourceWidget.components.find(c => c.id === newParentId);
-                        let foundCircular = false;
+                    // Helper function to get all descendants of a component
+                    const getDescendants = (parentId: EntityId, components: WidgetComponent[]): WidgetComponent[] => {
+                        const result: WidgetComponent[] = [];
 
-                        // Check if the new parent is a descendant of the component being moved
-                        while (current && current.parentId) {
-                            if (current.parentId === componentId) {
-                                console.warn("Cannot create circular reference in component hierarchy");
-                                foundCircular = true;
-                                break;
-                            }
-                            current = sourceWidget.components.find(c => c.id === current!.parentId);
-                        }
+                        // Find immediate children
+                        const children = components.filter(c => c.parentId === parentId);
 
-                        if (foundCircular) return state;
-                    }
+                        // Add children to result
+                        children.forEach(child => {
+                            result.push(child);
 
-                    // Create a new state object
-                    const newState = { ...state };
-
-                    // Handle same-widget moves (simpler case)
-                    if (destWidgetId === sourceWidgetId) {
-                        const oldParentId = componentToMove.parentId;
-
-                        // Update the component's parent
-                        const updatedComponents = sourceWidget.components.map(c => {
-                            if (c.id === componentId) {
-                                // Update the moved component
-                                return { ...c, parentId: newParentId || undefined };
-                            }
-                            else if (c.id === oldParentId) {
-                                // Update old parent's childIds
-                                return {
-                                    ...c,
-                                    childIds: c.childIds.filter(id => id !== componentId)
-                                };
-                            }
-                            else if (c.id === newParentId) {
-                                // Update new parent's childIds
-                                return {
-                                    ...c,
-                                    childIds: [...c.childIds, componentId]
-                                };
-                            }
-                            return c;
+                            // Recursively add grandchildren
+                            const grandchildren = getDescendants(child.id, components);
+                            result.push(...grandchildren);
                         });
 
-                        // Update the widget
-                        newState.widgets[sourceWidgetId] = {
-                            ...sourceWidget,
-                            components: updatedComponents
-                        };
+                        return result;
+                    };
+
+                    // Check for circular reference
+                    if (sourceWidgetId === destWidgetId && newParentId) {
+                        let current = sourceWidget.components.find(c => c.id === newParentId);
+
+                        while (current) {
+                            if (current.id === componentId) {
+                                console.error("Circular reference detected - cannot move a component to its own descendant");
+                                return false;
+                            }
+
+                            // Move up the chain
+                            current = current.parentId ?
+                                sourceWidget.components.find(c => c.id === current?.parentId) :
+                                undefined;
+                        }
                     }
-                    // Handle cross-widget moves
-                    else {
-                        // Helper function to get a component and all its descendants
-                        const getComponentWithChildren = (
-                            components: WidgetComponent[],
-                            rootId: EntityId
-                        ): WidgetComponent[] => {
-                            const result: WidgetComponent[] = [];
 
-                            // First get the root component
-                            const rootComponent = components.find(c => c.id === rootId);
-                            if (!rootComponent) return result;
+                    // Get old parent info
+                    const oldParentId = componentToMove.parentId;
 
-                            // Add root component
-                            result.push(rootComponent);
+                    // Get all descendants that need to move with this component
+                    const descendants = getDescendants(componentId, sourceWidget.components);
 
-                            // Recursively add children
-                            const addChildren = (parentId: EntityId) => {
-                                const children = components.filter(c => c.parentId === parentId);
-                                for (const child of children) {
-                                    result.push(child);
-                                    addChildren(child.id);
-                                }
-                            };
+                    logDebug(`Moving component ${componentId} with ${descendants.length} descendants`);
 
-                            // Start recursion from root
-                            addChildren(rootId);
-                            return result;
-                        };
+                    // Prepare all components that need to be moved (including the root)
+                    const componentsToMove = [componentToMove, ...descendants];
 
-                        // Get the component and all its descendants
-                        const componentsToMove = getComponentWithChildren(sourceWidget.components, componentId);
+                    // Log the component hierarchy before modification
+                    logDebug('Components to move:', componentsToMove.map(c => ({
+                        id: c.id,
+                        parentId: c.parentId
+                    })));
 
-                        // 1. Remove components from source widget
-                        newState.widgets[sourceWidgetId] = {
-                            ...sourceWidget,
-                            components: sourceWidget.components.filter(c =>
-                                !componentsToMove.some(moveComp => moveComp.id === c.id)
-                            )
-                        };
+                    // For cross-widget moves
+                    if (sourceWidgetId !== destWidgetId) {
+                        set(state => {
+                            // Create new state to modify
+                            const newState = { ...state };
 
-                        // 2. Update parent references in source widget components
-                        newState.widgets[sourceWidgetId].components = newState.widgets[sourceWidgetId].components.map(c => {
-                            // Check if this component has any of the moved components as children
-                            const updatedChildIds = c.childIds.filter(childId =>
-                                !componentsToMove.some(moveComp => moveComp.id === childId)
+                            // 1. Remove moved components from source widget
+                            const remainingComponents = sourceWidget.components.filter(
+                                c => !componentsToMove.some(mc => mc.id === c.id)
                             );
 
-                            // Only update if childIds changed
-                            if (updatedChildIds.length !== c.childIds.length) {
-                                return { ...c, childIds: updatedChildIds };
+                            // 2. Update the source widget
+                            newState.widgets[sourceWidgetId] = {
+                                ...sourceWidget,
+                                components: remainingComponents
+                            };
+
+                            // 3. Update child references in remaining components in source widget
+                            newState.widgets[sourceWidgetId].components = remainingComponents.map(c => {
+                                // Check if this component references any moved components in childIds
+                                const updatedChildIds = c.childIds.filter(
+                                    childId => !componentsToMove.some(mc => mc.id === childId)
+                                );
+
+                                // Only update if childIds changed
+                                if (updatedChildIds.length !== c.childIds.length) {
+                                    return { ...c, childIds: updatedChildIds };
+                                }
+
+                                return c;
+                            });
+
+                            // 4. Create modified components for destination widget
+                            const modifiedComponents = componentsToMove.map(comp => {
+                                const newComp = { ...comp };
+
+                                // Update instance ID if in the map
+                                if (instanceMap && instanceMap.has(comp.instanceId)) {
+                                    newComp.instanceId = instanceMap.get(comp.instanceId)!;
+                                }
+
+                                // Only update parent ID for the root component
+                                if (comp.id === componentId) {
+                                    newComp.parentId = newParentId;
+                                }
+
+                                return newComp;
+                            });
+
+                            // 5. Add to destination widget
+                            newState.widgets[destWidgetId] = {
+                                ...destWidget,
+                                components: [...destWidget.components, ...modifiedComponents]
+                            };
+
+                            // 6. Update parent links in the destination widget
+                            if (newParentId) {
+                                newState.widgets[destWidgetId].components = newState.widgets[destWidgetId].components.map(c => {
+                                    if (c.id === newParentId) {
+                                        return {
+                                            ...c,
+                                            childIds: [...c.childIds, componentId]
+                                        };
+                                    }
+                                    return c;
+                                });
                             }
-                            return c;
+
+                            logDebug('Move complete');
+                            return newState;
                         });
+                    }
+                    // For same-widget moves (simpler case)
+                    else {
+                        set(state => {
+                            // Create new state to modify
+                            const newState = { ...state };
 
-                        // 3. Update the moved components with new parent references
-                        const modifiedComponentsToMove = componentsToMove.map(c => {
-                            // If this is the root component being moved, update its parent
-                            if (c.id === componentId) {
-                                return { ...c, parentId: newParentId || undefined };
-                            }
-
-                            // For child components, keep them as they are
-                            return c;
-                        });
-
-                        // 4. Add components to destination widget
-                        newState.widgets[destWidgetId] = {
-                            ...destWidget,
-                            components: [...destWidget.components, ...modifiedComponentsToMove]
-                        };
-
-                        // 5. Update new parent childIds in destination widget if specified
-                        if (newParentId) {
-                            newState.widgets[destWidgetId].components = newState.widgets[destWidgetId].components.map(c => {
-                                if (c.id === newParentId) {
-                                    return {
-                                        ...c,
-                                        childIds: [...c.childIds, componentId]
+                            // Update old parent's childIds
+                            if (oldParentId) {
+                                const oldParent = sourceWidget.components.find(c => c.id === oldParentId);
+                                if (oldParent) {
+                                    const updatedOldParent = {
+                                        ...oldParent,
+                                        childIds: oldParent.childIds.filter(id => id !== componentId)
                                     };
+
+                                    // Replace old parent with updated version
+                                    newState.widgets[sourceWidgetId].components = sourceWidget.components.map(c =>
+                                        c.id === oldParentId ? updatedOldParent : c
+                                    );
+                                }
+                            }
+
+                            // Update new parent's childIds
+                            if (newParentId) {
+                                const newParent = sourceWidget.components.find(c => c.id === newParentId);
+                                if (newParent) {
+                                    const updatedNewParent = {
+                                        ...newParent,
+                                        childIds: [...newParent.childIds, componentId]
+                                    };
+
+                                    // Replace new parent with updated version
+                                    newState.widgets[sourceWidgetId].components = newState.widgets[sourceWidgetId].components.map(c =>
+                                        c.id === newParentId ? updatedNewParent : c
+                                    );
+                                }
+                            }
+
+                            // Update the moved component's parentId
+                            newState.widgets[sourceWidgetId].components = newState.widgets[sourceWidgetId].components.map(c => {
+                                if (c.id === componentId) {
+                                    return { ...c, parentId: newParentId };
                                 }
                                 return c;
                             });
-                        }
+
+                            logDebug('Move complete');
+                            return newState;
+                        });
                     }
 
-                    return newState;
-                });
-
-                // Generate events based on whether this is a cross-widget move
-                const isCrossWidgetMove = destinationWidgetId && destinationWidgetId !== sourceWidgetId;
-
-                if (isCrossWidgetMove) {
-                    // Notify about cross-widget movement
-                    eventBus.publish('component:moved', {
-                        sourceWidgetId,
-                        destinationWidgetId,
-                        componentId,
-                        parentId: newParentId
-                    });
-
-                    // Notify about hierarchy changes in both widgets
-                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
-                    eventBus.publish('hierarchy:changed', { widgetId: destinationWidgetId });
-                } else {
-                    // Notify about same-widget movement
-                    eventBus.publish('component:moved', {
-                        widgetId: sourceWidgetId,
-                        componentId,
-                        parentId: newParentId
-                    });
-
-                    // Notify about hierarchy change
-                    eventBus.publish('hierarchy:changed', { widgetId: sourceWidgetId });
+                    return true;
+                } catch (error) {
+                    console.error("Error in moveComponent:", error);
+                    return false;
                 }
             },
 
@@ -894,35 +1087,83 @@ export const useWidgetStore = create<WidgetStore>()(
                 // Import component store dynamically to avoid circular dependencies
                 const getComponent = async (instanceId: EntityId) => {
                     try {
-                        // Try to dynamically load the component store
-                        const module = await import('@/store/componentStore');
-                        const componentStore = module.useComponentStore.getState();
-                        return componentStore.getInstance(instanceId);
-                    } catch (error) {
-                        if (debug) {
-                            console.error(`Failed to load instance ${instanceId}:`, error);
+                        // Try to dynamically load the component store with retry logic
+                        let retries = 0;
+                        const maxRetries = 3;
+                        let lastError;
+
+                        while (retries < maxRetries) {
+                            try {
+                                const module = await import('@/store/componentStore');
+                                const componentStore = module.useComponentStore.getState();
+
+                                // Try to get the instance, but wrap in try/catch to handle errors gracefully
+                                try {
+                                    const instance = componentStore.getInstance(instanceId);
+
+                                    // Validate the instance to ensure it's complete
+                                    if (!instance || !instance.id) {
+                                        throw new Error(`Instance ${instanceId} is invalid or incomplete`);
+                                    }
+
+                                    return instance;
+                                } catch (instanceError) {
+                                    // If getInstance fails, create a placeholder instead of retrying
+                                    console.warn(`Using placeholder for instance ${instanceId}:`, instanceError);
+
+                                    // Skip retries for this specific error
+                                    throw instanceError;
+                                }
+                            } catch (error) {
+                                lastError = error;
+                                retries++;
+
+                                // Brief delay before retry
+                                if (retries < maxRetries) {
+                                    await new Promise(resolve => setTimeout(resolve, 50));
+                                }
+                            }
                         }
-                        return null;
+
+                        // After retries are exhausted, log the last error
+                        console.error(`Failed to load component store after ${maxRetries} attempts:`, lastError);
+                        console.warn(`Creating placeholder for instance ${instanceId}`);
+
+                        // Create a placeholder instance
+                        return {
+                            id: instanceId,
+                            type: 'unknown',
+                            definitionId: 'unknown',
+                            label: `Missing Component (${instanceId.split('-')[0] || 'unknown'})`,
+                            metadata: {
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                version: 0,
+                                isPlaceholder: true // Mark as placeholder for debugging
+                            }
+                        };
+                    } catch (error) {
+                        console.error(`Failed to process instance ${instanceId}:`, error);
+
+                        // Return placeholder instance
+                        return {
+                            id: instanceId,
+                            type: 'unknown',
+                            definitionId: 'unknown',
+                            label: `Error Component`,
+                            metadata: {
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                                version: 0,
+                                isPlaceholder: true,
+                                error: error instanceof Error ? error.message : String(error)
+                            }
+                        };
                     }
                 };
 
                 // Recursively build tree
-                const buildTree = async (component: WidgetComponent): Promise<{
-                    id: string;
-                    type: string;
-                    label: string;
-                    icon: any;
-                    canDrop: boolean;
-                    canDrag: boolean;
-                    data?: {
-                        componentId: EntityId;
-                        widgetId: EntityId;
-                        instanceId: EntityId;
-                        definitionId: EntityId;
-                    };
-                    parentId?: string;
-                    children: any[];
-                }> => {
+                const buildTree = async (component: WidgetComponent): Promise<HierarchyNode> => {
                     try {
                         // Find child components
                         const childComponents = widget.components.filter(c => c.parentId === component.id);
@@ -930,14 +1171,26 @@ export const useWidgetStore = create<WidgetStore>()(
                             console.log(`Component ${component.id} has ${childComponents.length} children`);
                         }
 
-                        // Get component instance
+                        // Get component instance with error handling
                         let instance;
                         try {
                             instance = await getComponent(component.instanceId);
                         } catch (err) {
-                            if (debug) {
-                                console.warn(`Instance not found for component ${component.id}`);
-                            }
+                            // Never let an instance error break the hierarchy
+                            console.error(`Error getting instance, using fallback:`, err);
+                            instance = {
+                                id: component.instanceId,
+                                type: 'error',
+                                definitionId: component.definitionId,
+                                label: `Error: ${component.id}`,
+                                metadata: {
+                                    createdAt: new Date(),
+                                    updatedAt: new Date(),
+                                    version: 0,
+                                    isPlaceholder: true,
+                                    error: err instanceof Error ? err.message : String(err)
+                                }
+                            };
                         }
 
                         // Determine component type and label
@@ -945,7 +1198,7 @@ export const useWidgetStore = create<WidgetStore>()(
                         const instanceLabel = instance?.label || component.id.toString().split('-')[0];
 
                         // Determine icon based on component type
-                        let icon = componentIconMap["Panel"];
+                        let icon = componentIconMap["Panel"] || PanelIcon;
                         if (componentIconMap[instanceType]) {
                             icon = componentIconMap[instanceType];
                         }
@@ -956,6 +1209,17 @@ export const useWidgetStore = create<WidgetStore>()(
                             instanceType === 'ScrollBox' ||
                             instanceType === 'Drawer' ||
                             instanceType === 'Tabs';
+
+                        // Process children with error handling
+                        let processedChildren: HierarchyNode[] = [];
+                        try {
+                            processedChildren = await Promise.all(
+                                childComponents.map(childComp => buildTree(childComp))
+                            );
+                        } catch (childError) {
+                            console.error(`Error processing children for ${component.id}:`, childError);
+                            // Continue with empty children array rather than failing
+                        }
 
                         return {
                             // Use combined widget/component ID for tree identification
@@ -976,10 +1240,11 @@ export const useWidgetStore = create<WidgetStore>()(
                             // Include parent reference for easier hierarchy management
                             parentId: component.parentId ? `${widgetId}/${component.parentId}` : undefined,
                             // Process children recursively
-                            children: await Promise.all(childComponents.map(buildTree))
+                            children: processedChildren
                         };
                     } catch (error) {
                         console.error(`Error building tree for component ${component.id}:`, error);
+                        // Return a fallback node instead of failing
                         return {
                             id: `${widgetId}/${component.id}`,
                             type: 'error',
@@ -999,24 +1264,58 @@ export const useWidgetStore = create<WidgetStore>()(
                 }
 
                 // Create and execute async function to build hierarchy
-                const buildFullHierarchy = async () => {
-                    const rootNodes = await Promise.all(rootComponents.map(buildTree));
+                const buildFullHierarchy = async (): Promise<HierarchyNode[]> => {
+                    try {
+                        // Process each root component with individual error handling
+                        const rootNodes: HierarchyNode[] = [];
+                        for (const rootComponent of rootComponents) {
+                            try {
+                                const node = await buildTree(rootComponent);
+                                rootNodes.push(node);
+                            } catch (nodeError) {
+                                console.error(`Error processing root component ${rootComponent.id}:`, nodeError);
+                                // Add a fallback node instead of failing the entire hierarchy
+                                rootNodes.push({
+                                    id: `${widgetId}/${rootComponent.id}`,
+                                    type: 'error',
+                                    label: `Error: ${rootComponent.id}`,
+                                    icon: PanelIcon,
+                                    canDrop: false,
+                                    canDrag: false,
+                                    children: []
+                                });
+                            }
+                        }
 
-                    // If includeWidget is false, return just the root components
-                    if (!includeWidget) {
-                        return rootNodes;
+                        // If includeWidget is false, return just the root components
+                        if (!includeWidget) {
+                            return rootNodes;
+                        }
+
+                        // Map widget as the root with components as children
+                        return [{
+                            id: widgetId,
+                            type: 'Widget',
+                            label: widget.label || 'Widget',
+                            icon: WidgetIcon,
+                            canDrop: true, // Widget can accept top-level components
+                            canDrag: false, // Widget itself can't be dragged in the hierarchy
+                            children: rootNodes
+                        }];
+                    } catch (error) {
+                        console.error(`Error building full hierarchy for widget ${widgetId}:`, error);
+
+                        // Return a minimal valid structure instead of failing
+                        return [{
+                            id: widgetId,
+                            type: 'Widget',
+                            label: widget.label || 'Widget',
+                            icon: WidgetIcon,
+                            canDrop: true,
+                            canDrag: false,
+                            children: []
+                        }];
                     }
-
-                    // Map widget as the root with components as children
-                    return [{
-                        id: widgetId,
-                        type: 'Widget',
-                        label: widget.label || 'Widget',
-                        icon: WidgetIcon,
-                        canDrop: true, // Widget can accept top-level components
-                        canDrag: false, // Widget itself can't be dragged in the hierarchy
-                        children: rootNodes
-                    }];
                 };
 
                 // Start the hierarchy building process
@@ -1041,7 +1340,7 @@ export const useWidgetStore = create<WidgetStore>()(
             ) => {
                 set(state => {
                     // Debug logging
-                    console.log(`ARRAY REORDER: ${componentId} ${position} ${targetId} in ${containerId}`);
+                    // console.log(`ARRAY REORDER: ${componentId} ${position} ${targetId} in ${containerId}`);
 
                     const widget = state.widgets[widgetId];
                     if (!widget) return state;
@@ -1121,8 +1420,8 @@ export const useWidgetStore = create<WidgetStore>()(
                     }
 
                     // Log the results for debugging
-                    console.log("BEFORE:", originalComponents.map(c => c.id).join(", "));
-                    console.log("AFTER:", result.map(c => c.id).join(", "));
+                    // console.log("BEFORE:", originalComponents.map(c => c.id).join(", "));
+                    // console.log("AFTER:", result.map(c => c.id).join(", "));
 
                     // Replace the entire components array with our new one
                     return {

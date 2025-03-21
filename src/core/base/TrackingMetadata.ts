@@ -11,6 +11,8 @@ export interface TrackingMetadata {
     compatibilityVersion: string;   // Minimum app version required
     createdBy?: string;             // User ID for user-created components
     isUserComponent?: boolean;      // Flag for user vs. system components
+    isPlaceholder?: boolean;        // Flag for placeholder components
+    reconstructed?: boolean;        // Flag for reconstructed components
 }
 
 /**
@@ -24,6 +26,8 @@ export interface SerializedTrackingMetadata {
     compatibilityVersion: string;
     createdBy?: string;
     isUserComponent?: boolean;
+    isPlaceholder?: boolean;
+    reconstructed?: boolean;
 }
 
 /**
@@ -38,7 +42,9 @@ export const TrackingMetadataUtils = {
             definitionVersion: metadata.definitionVersion,
             compatibilityVersion: metadata.compatibilityVersion,
             createdBy: metadata.createdBy,
-            isUserComponent: metadata.isUserComponent
+            isUserComponent: metadata.isUserComponent,
+            isPlaceholder: metadata.isPlaceholder,
+            reconstructed: metadata.reconstructed
         };
     },
 
@@ -50,7 +56,9 @@ export const TrackingMetadataUtils = {
             definitionVersion: serialized.definitionVersion,
             compatibilityVersion: serialized.compatibilityVersion,
             createdBy: serialized.createdBy,
-            isUserComponent: serialized.isUserComponent
+            isUserComponent: serialized.isUserComponent,
+            isPlaceholder: serialized.isPlaceholder,
+            reconstructed: serialized.reconstructed
         };
     }
 };

@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { PanelPositionValues, UIState } from '@/core/types/UI';
+import { PanelConfig, PanelPositionValues, UIState } from '@/core/types/UI';
 import { createEntityId, EntityId } from '@/core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
 import { MeasurementUtils } from '@/core/types/Measurement';
@@ -54,23 +54,6 @@ export const PANEL_TOOLTIPS: Record<PanelName, string> = {
 
 export type PanelTooltipName = keyof typeof PANEL_TOOLTIPS;
 
-// Selection state interface
-export interface SelectionState {
-    // Currently selected component and widget IDs
-    selectedComponentId: EntityId | null;
-    selectedWidgetId: EntityId | null;
-
-    // Previous selection state for managing focus history
-    previousComponentId: EntityId | null;
-    previousWidgetId: EntityId | null;
-
-    // Timestamp of last selection for debouncing
-    lastSelectionTime: number;
-
-    // Selection counts for analytics (useful for future features)
-    selectionCount: number;
-}
-
 // Default panel configurations
 const DEFAULT_PANEL_CONFIGS = {
     [PANEL_IDS.COMPONENT_PALETTE]: {
@@ -99,6 +82,48 @@ const DEFAULT_PANEL_CONFIGS = {
     }
 };
 
+/**
+ * Drag operation tracking state
+ */
+export interface DragState {
+    // Active drag operation
+    isDragging: boolean;
+    sourceId?: string;
+    sourceWidgetId?: EntityId;
+    sourceComponentId?: EntityId;
+
+    // Drop target tracking
+    targetId?: string;
+    targetWidgetId?: EntityId;
+    targetComponentId?: EntityId;
+
+    // Metadata
+    timestamp?: number;
+    dragType?: string;
+}
+
+// Default drag state
+const DEFAULT_DRAG_STATE: DragState = {
+    isDragging: false
+};
+
+// Selection state interface
+export interface SelectionState {
+    // Currently selected component and widget IDs
+    selectedComponentId: EntityId | null;
+    selectedWidgetId: EntityId | null;
+
+    // Previous selection state for managing focus history
+    previousComponentId: EntityId | null;
+    previousWidgetId: EntityId | null;
+
+    // Timestamp of last selection for debouncing
+    lastSelectionTime: number;
+
+    // Selection counts for analytics (useful for future features)
+    selectionCount: number;
+}
+
 // Initial selection state
 const DEFAULT_SELECTION_STATE: SelectionState = {
     selectedComponentId: null,
@@ -109,10 +134,21 @@ const DEFAULT_SELECTION_STATE: SelectionState = {
     selectionCount: 0
 };
 
+export interface LayoutHierarchyOperations {
+    // Select an item in the hierarchy (format: widgetId/componentId or just widgetId)
+    selectItem: (id: EntityId | null) => void;
+
+    // Get currently selected items in the hierarchy
+    getSelectedItems: () => string[];
+
+    // Refresh the hierarchy view
+    refreshView: (force?: boolean) => void;
+}
+
 /**
  * Extended UI store interface that includes selection state and methods
  */
-interface UIStoreState extends UIState, SelectionState {
+export interface UIStoreState extends UIState, SelectionState {
     // Editor mode
     isEditMode: boolean;
     toggleEditMode: () => void;
@@ -120,26 +156,52 @@ interface UIStoreState extends UIState, SelectionState {
     // Panel management
     togglePanel: (panelId: EntityId) => void;
     getPanelConfig: (panelId: EntityId) => UIState['panelStates'][EntityId];
+    updatePanelConfig: (panelId: EntityId, config: Partial<PanelConfig>) => void;
 
     // Grid settings
     updateGridSettings: (settings: Partial<UIState['gridSettings']>) => void;
 
-    // Component selection
+    // Selection state management
+    updateSelectionState: (state: Partial<SelectionState>) => void;
+
+    // Component selection - basic state operations only
     selectComponent: (
         componentId: EntityId | null,
         widgetId: EntityId | null,
         options?: { openPropertyPanel?: boolean, syncWithLayoutPanel?: boolean }
     ) => void;
-    selectInstanceComponent: (instanceId: EntityId | null) => void;
+
     deselectAll: () => void;
     isComponentSelected: (componentId: EntityId) => boolean;
-    deleteSelectedComponent: () => void;
-    syncWithLayoutPanel: (componentId: EntityId | null, widgetId: EntityId | null) => void;
-    getSelectedComponentInfo: () => {
-        componentId: EntityId | null,
-        widgetId: EntityId | null,
-        instanceId: EntityId | null,
-        type: string | null
+
+    // Drag state
+    dragState: DragState;
+
+    // Drag operations
+    startDrag: (data: {
+        sourceId: string;
+        sourceWidgetId?: EntityId;
+        sourceComponentId?: EntityId;
+        dragType?: string;
+    }) => void;
+
+    updateDragTarget: (data: {
+        targetId?: string;
+        targetWidgetId?: EntityId;
+        targetComponentId?: EntityId;
+    }) => void;
+
+    endDrag: () => void;
+
+    // Layout hierarchy operations
+    layoutHierarchy: {
+        // Function to call when the hierarchy should be refreshed
+        refreshRequested: boolean;
+        forceRefresh: boolean;
+        requestRefresh: (force?: boolean) => void;
+
+        // Function to track when refresh is completed
+        refreshCompleted: () => void;
     };
 
     // Store reset
@@ -149,8 +211,6 @@ interface UIStoreState extends UIState, SelectionState {
 /**
  * UI Store that manages application UI state including panel configurations,
  * selection state, and editor preferences.
- *
- * This store combines UI configuration with selection state management.
  */
 export const useUIStore = create<UIStoreState>()(
     persist(
@@ -162,6 +222,10 @@ export const useUIStore = create<UIStoreState>()(
 
             // Selection State
             ...DEFAULT_SELECTION_STATE,
+
+            // Drag State
+            dragState: DEFAULT_DRAG_STATE,
+            layoutHierarchyStore: null,
 
             // Panel States
             panelStates: Object.keys(DEFAULT_PANEL_CONFIGS).reduce((acc, id) => ({
@@ -175,8 +239,7 @@ export const useUIStore = create<UIStoreState>()(
             toggleEditMode: () => set(state => ({ isEditMode: !state.isEditMode })),
 
             /**
-             * Toggle the visibility of a panel. If the panel is already visible, hide it.
-             * If it is hidden, show it.
+             * Toggle the visibility of a panel
              * @param {EntityId} panelId
              * @throws {StoreError} If the panel ID is not valid
              */
@@ -203,9 +266,41 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Update the grid settings. The provided object will be merged onto the
-             * existing grid settings.
-             *
+             * Update the configuration of a panel
+             * @param {EntityId} panelId - ID of the panel to update
+             * @param {Partial<PanelConfig>} config - Partial panel configuration to apply
+             * @throws {StoreError} If the panel ID is not valid
+             */
+            updatePanelConfig: (panelId, config) => {
+                const state = get();
+                const panelConfig = state.panelStates[panelId];
+
+                if (!panelConfig) {
+                    throw new StoreError(
+                        'Invalid panel ID provided',
+                        StoreErrorCodes.INVALID_PANEL_ID
+                    );
+                }
+
+                set((state) => ({
+                    panelStates: {
+                        ...state.panelStates,
+                        [panelId]: {
+                            ...panelConfig,
+                            ...config
+                        }
+                    }
+                }));
+
+                // Notify about panel config change
+                eventBus.publish("ui:panel:updated", {
+                    panelId,
+                    config
+                });
+            },
+
+            /**
+             * Update the grid settings
              * @param {object} settings - Partial grid settings to apply
              * @throws {StoreError} If the grid size is less than or equal to 0
              */
@@ -226,7 +321,7 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Get the configuration for a panel by its ID.
+             * Get the configuration for a panel by its ID
              * @param {EntityId} panelId ID of the panel to get the configuration for
              * @returns {PanelConfig} The panel configuration
              * @throws {StoreError} If the panel ID is not valid
@@ -246,7 +341,18 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Select a component within a widget
+             * Update selection state with partial data
+             * @param state Partial selection state to update
+             */
+            updateSelectionState: (state: Partial<SelectionState>) => {
+                set((current) => ({
+                    ...current,
+                    ...state
+                }));
+            },
+
+            /**
+             * Select a component within a widget - basic state update only
              * @param componentId The ID of the component to select, or null to deselect
              * @param widgetId The ID of the widget containing the component
              * @param options Additional options for selection behavior
@@ -256,7 +362,7 @@ export const useUIStore = create<UIStoreState>()(
                 widgetId: EntityId | null,
                 options = { openPropertyPanel: true, syncWithLayoutPanel: true }
             ) => {
-                const { openPropertyPanel = true, syncWithLayoutPanel = true } = options;
+                const { openPropertyPanel = true } = options;
                 const currentTime = Date.now();
                 const { selectedComponentId, selectedWidgetId, lastSelectionTime } = get();
 
@@ -289,56 +395,18 @@ export const useUIStore = create<UIStoreState>()(
                         get().togglePanel(PANEL_IDS.PROPERTY_EDITOR);
                     }
                 }
-
-                // Sync with layout panel if requested
-                if (syncWithLayoutPanel) {
-                    get().syncWithLayoutPanel(componentId, widgetId);
-                }
-
-                // Notify widget change for any listeners
-                if (widgetId) {
-                    eventBus.publish('component:selected', { componentId, widgetId });
-                }
             },
 
             /**
-             * Select a component by its instance ID
-             * @param instanceId The instance ID to select, or null to deselect
-             */
-            selectInstanceComponent: (instanceId: EntityId | null) => {
-                set(() => ({
-                    selectedComponent: instanceId
-                }));
-            },
-
-            /**
-             * Deselect all components
+             * Deselect all components - basic state update only
              */
             deselectAll: () => {
-                const { selectedWidgetId } = get();
-
-                // Update selection state
                 set({
                     selectedComponentId: null,
                     selectedComponent: null,
                     previousComponentId: get().selectedComponentId,
                     lastSelectionTime: Date.now()
                 });
-
-                // // Clear layout panel selection - This may be causing an infinite loop
-                // const layoutHierarchy = window._layoutHierarchyStore;
-                // if (layoutHierarchy?.selectItem) {
-                //     try {
-                //         layoutHierarchy.selectItem(null);
-                //     } catch (e) {
-                //         console.error('Error clearing layout panel selection:', e);
-                //     }
-                // }
-
-                // Notify widget change if a widget was selected
-                if (selectedWidgetId) {
-                    eventBus.publish('component:deselected', { widgetId: selectedWidgetId });
-                }
             },
 
             /**
@@ -351,97 +419,79 @@ export const useUIStore = create<UIStoreState>()(
             },
 
             /**
-             * Delete the currently selected component.
-             * This method intentionally does not directly access other stores
-             * and relies on the builder service to perform the actual deletion.
+             * Start tracking a drag operation
              */
-            deleteSelectedComponent: () => {
-                const { selectedComponentId, selectedWidgetId } = get();
+            startDrag: (data) => {
+                set((_state) => ({
+                    dragState: {
+                        isDragging: true,
+                        sourceId: data.sourceId,
+                        sourceWidgetId: data.sourceWidgetId,
+                        sourceComponentId: data.sourceComponentId,
+                        dragType: data.dragType || 'component',
+                        timestamp: Date.now()
+                    }
+                }));
 
-                if (!selectedComponentId || !selectedWidgetId) {
-                    console.warn('No component selected to delete');
-                    return;
+                // Add class to body for global styling during drag
+                document.body.classList.add('drag-in-progress');
+                if (data.sourceWidgetId) {
+                    document.body.setAttribute('data-drag-widget', data.sourceWidgetId.toString());
                 }
+            },
 
-                // We'll only handle the selection state update here
-                // The actual deletion should be handled by the builder service
+            /**
+             * Update the drag target information
+             */
+            updateDragTarget: (data) => {
+                set((state) => ({
+                    dragState: {
+                        ...state.dragState,
+                        targetId: data.targetId,
+                        targetWidgetId: data.targetWidgetId,
+                        targetComponentId: data.targetComponentId
+                    }
+                }));
+            },
+
+            /**
+             * End drag tracking operation
+             */
+            endDrag: () => {
                 set({
-                    selectedComponentId: null,
-                    selectedComponent: null,
-                    previousComponentId: selectedComponentId,
-                    lastSelectionTime: Date.now()
+                    dragState: DEFAULT_DRAG_STATE
                 });
 
-                // Emit event for deletion - to be handled by listeners
-                const event = new CustomEvent('component:delete', {
-                    detail: {
-                        componentId: selectedComponentId,
-                        widgetId: selectedWidgetId
-                    }
-                });
-                document.dispatchEvent(event);
+                // Remove drag styling classes
+                document.body.classList.remove('drag-in-progress');
+                document.body.removeAttribute('data-drag-widget');
             },
 
-            /**
-             * Sync selection with the layout panel
-             * @param componentId The component ID to select
-             * @param widgetId The widget ID containing the component
-             */
-            syncWithLayoutPanel: (componentId: EntityId | null, widgetId: EntityId | null) => {
-                // Access the layout hierarchy store if available
-                const layoutHierarchy = window._layoutHierarchyStore;
-                if (!layoutHierarchy?.selectItem) {
-                    return;
+            layoutHierarchy: {
+                refreshRequested: false,
+                forceRefresh: false,
+
+                // Request a refresh of the layout hierarchy
+                requestRefresh: (force = false) => {
+                    set(state => ({
+                        layoutHierarchy: {
+                            ...state.layoutHierarchy,
+                            refreshRequested: true,
+                            forceRefresh: force
+                        }
+                    }));
+                },
+
+                // Mark refresh as completed
+                refreshCompleted: () => {
+                    set(state => ({
+                        layoutHierarchy: {
+                            ...state.layoutHierarchy,
+                            refreshRequested: false,
+                            forceRefresh: false
+                        }
+                    }));
                 }
-
-                try {
-                    if (componentId && widgetId) {
-                        // Format: widgetId/componentId
-                        layoutHierarchy.selectItem(`${widgetId}/${componentId}` as EntityId);
-                    } else {
-                        // Clear selection
-                        layoutHierarchy.selectItem(null);
-                    }
-                } catch (e) {
-                    console.error('Error syncing with layout panel:', e);
-                }
-            },
-
-            /**
-             * Get information about the currently selected component
-             * @returns Object with component info
-             */
-            getSelectedComponentInfo: () => {
-                const { selectedComponentId, selectedWidgetId } = get();
-
-                // Default return when nothing is selected
-                const defaultInfo = {
-                    componentId: null,
-                    widgetId: null,
-                    instanceId: null,
-                    type: null
-                };
-
-                if (!selectedComponentId || !selectedWidgetId) {
-                    return defaultInfo;
-                }
-
-                // Emit event to request component info - to be handled by listeners
-                const event = new CustomEvent('component:getInfo', {
-                    detail: {
-                        componentId: selectedComponentId,
-                        widgetId: selectedWidgetId
-                    }
-                });
-                document.dispatchEvent(event);
-
-                // Return placeholder - actual implementation will be in a hook
-                return {
-                    componentId: selectedComponentId,
-                    widgetId: selectedWidgetId,
-                    instanceId: null,
-                    type: null
-                };
             },
 
             /**
@@ -453,7 +503,8 @@ export const useUIStore = create<UIStoreState>()(
 
                 const newState: Partial<UIStoreState> = {
                     ...DEFAULT_SELECTION_STATE,
-                    selectedComponent: null
+                    selectedComponent: null,
+                    dragState: DEFAULT_DRAG_STATE
                 };
 
                 // Only reset editor state if explicitly requested
@@ -467,6 +518,12 @@ export const useUIStore = create<UIStoreState>()(
                 }
 
                 set(newState);
+
+                // Publish an event to notify subscribers about the reset
+                // This ensures LayoutPanel and other subscribers can respond
+                setTimeout(() => {
+                    eventBus.publish("store:reset", { timestamp: Date.now() });
+                }, 0);
             }
         }),
         {
@@ -515,6 +572,18 @@ export function usePanelVisibility(panelName: PanelName) {
 }
 
 /**
+ * Helper hook for updating panel configuration by name
+ * @param panelName The name of the panel to update
+ * @returns Function to update panel configuration
+ */
+export function usePanelConfigUpdater(panelName: PanelName) {
+    const panelId = PANEL_IDS[panelName];
+    const updateConfig = useUIStore((state) => state.updatePanelConfig);
+
+    return (config: Partial<PanelConfig>) => updateConfig(panelId, config);
+}
+
+/**
  * Hook to get the currently selected component ID
  * @returns The ID of the selected component or null
  */
@@ -544,14 +613,33 @@ export function useGridSettings() {
 }
 
 /**
- * Type definition for layout hierarchy store
+ * Hook to access and manipulate drag state
  */
-declare global {
-    interface Window {
-        _layoutHierarchyStore?: {
-            selectItem: (id: EntityId | null) => void;
-            getSelectedItems: () => string[];
-            refreshView: () => void;
-        };
-    }
+export function useDragTracking() {
+    const dragState = useUIStore(state => state.dragState);
+    const startDrag = useUIStore(state => state.startDrag);
+    const updateDragTarget = useUIStore(state => state.updateDragTarget);
+    const endDrag = useUIStore(state => state.endDrag);
+
+    return {
+        dragState,
+        startDrag,
+        updateDragTarget,
+        endDrag
+    };
+}
+
+/**
+ * Hook to access layout hierarchy operations
+ */
+export function useLayoutHierarchy() {
+    const { refreshRequested, forceRefresh, requestRefresh, refreshCompleted } =
+        useUIStore(state => state.layoutHierarchy);
+
+    return {
+        refreshRequested,
+        forceRefresh,
+        requestRefresh,
+        refreshCompleted
+    };
 }

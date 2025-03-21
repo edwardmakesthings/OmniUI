@@ -4,6 +4,7 @@ import { useDragAndDrop, useDragDrop, DragSource } from '../DragDropCore';
 import { UnitType } from '@/core/types/Measurement';
 import { DropPosition } from '../DropZone';
 import { builderService } from '@/store';
+import eventBus from '@/core/eventBus/eventBus';
 
 /**
  * Hook for making a widget a drop target for components
@@ -101,11 +102,11 @@ export function useWidgetDropTarget(
                     callbackRef.current(newComponent.id);
                 }
 
-                // Notify that a component was added (for other components that might be listening)
-                const event = new CustomEvent('widget-updated', {
-                    detail: { widgetId, action: 'component-added' }
+                // Notify that a component was added using the eventBus
+                eventBus.publish('widget:updated', {
+                    widgetId,
+                    action: 'component-added'
                 });
-                document.dispatchEvent(event);
             }
         } catch (error) {
             console.error('Error handling drop:', error);

@@ -133,7 +133,7 @@ export const DropdownPanel = ({
                             size={16}
                             className={cn(
                                 "transition-transform duration-200",
-                                isOpen && "rotate-180"
+                                !isOpen && "rotate-90"
                             )}
                         />
                     </div>
