@@ -30,6 +30,7 @@ export type EventType =
     | 'widget:deselected'
     | 'layout:refreshed'
     | 'ui:panel:toggled'
+    | 'ui:panel:updated'
     | 'store:reset'
     | 'drag:started'
     | 'drag:ended'

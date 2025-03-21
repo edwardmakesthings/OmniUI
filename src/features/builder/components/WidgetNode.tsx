@@ -18,9 +18,11 @@ import DropZoneIndicator from "./DropZoneIndicator";
 import { DropPosition } from "../dragDrop";
 import WidgetDropOverlay from "./WidgetDropOverlay";
 import { useComponentSelection } from "@/hooks/useComponentSelection";
+import "@/styles/borderResize.css";
+import BorderNodeResizer from "./BorderNodeResizer";
 
 /**
- * Represents a widget node on the canvas
+ * Represents a widget node on the canvas with resize functionality
  * Handles widget-level operations and rendering of contained components
  *
  * @path src/features/builder/components/WidgetNode.tsx
@@ -45,15 +47,103 @@ export const WidgetNode = memo(function WidgetNode({
     // Refs and state
     const [forceRender, setForceRender] = useState(0);
     const widgetRef = useRef<HTMLDivElement>(null);
-    const prevDimensionsRef = useRef({
-        width: data.size.width.value,
-        height: data.size.height.value,
-    });
-    const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const autoResizeEnabledRef = useRef(true);
 
     // State for tracking drop completion
     const [_dropRefresh, setDropRefresh] = useState(0);
+
+    // Track temporary size during resize
+    const [tempSize, setTempSize] = useState<{
+        width: number;
+        height: number;
+    } | null>(null);
+
+    // Track which handle is being used
+    const [activeHandle, setActiveHandle] = useState<string | null>(null);
+
+    // Track initial width for calculating position changes
+    const initialWidthRef = useRef<number>(0);
+
+    // Handle resize start to capture which handle is being used
+    const handleResizeStart = useCallback(
+        (_event: any, params: any) => {
+            // Store which handle is being used
+            setActiveHandle(params.position);
+
+            // Store initial width for reference
+            initialWidthRef.current = data.size.width.value;
+        },
+        [data.size.width.value]
+    );
+
+    // Handle live resize updates
+    const handleResizeChange = useCallback(
+        (width: number, _height: number) => {
+            // Store temporary size for immediate visual feedback
+            setTempSize({ width, height: data.size.height.value });
+        },
+        [data.size.height.value]
+    );
+
+    // Handle widget resize completion with ReactFlow's built-in resize system
+    const handleResizeComplete = useCallback(
+        (
+            width: number,
+            _height: number,
+            positionX?: number,
+            positionY?: number
+        ) => {
+            // Clear temporary size
+            setTempSize(null);
+
+            // Prepare update data for our widget store
+            const updateData: any = {
+                size: {
+                    width: { value: width, unit: "px" },
+                    height: data.size.height,
+                },
+            };
+
+            // If we received a position from the resizer component, use it
+            if (positionX !== undefined && positionY !== undefined) {
+                updateData.position = {
+                    x: { value: positionX, unit: "px" },
+                    y: { value: positionY, unit: "px" },
+                };
+            }
+            // Fall back to our calculated position if ReactFlow data isn't available
+            else if (activeHandle === "left") {
+                // Calculate the position change based on width change
+                const widthDelta = initialWidthRef.current - width;
+                updateData.position = {
+                    x: {
+                        value: data.position.x.value + widthDelta,
+                        unit: "px",
+                    },
+                    y: data.position.y,
+                };
+            }
+
+            // Reset active handle
+            setActiveHandle(null);
+
+            // Update widget
+            widgetStore.updateWidget(data.id, updateData);
+
+            // Publish resize event
+            eventBus.publish("widget:updated", {
+                widgetId: data.id,
+                action: "resized",
+            });
+        },
+        [
+            data.id,
+            data.position.x.value,
+            data.position.y,
+            data.size.height,
+            widgetStore,
+            activeHandle,
+        ]
+    );
 
     // Get selected component from selection state
     const selectedComponentId = useMemo(
@@ -164,9 +254,6 @@ export const WidgetNode = memo(function WidgetNode({
         widgetStore.updateWidget(data.id, {
             isEditMode: newEditMode,
         });
-
-        // If entering edit mode, enable autoresize; if exiting, disable it
-        autoResizeEnabledRef.current = newEditMode;
 
         // Publish widget update event
         eventBus.publish("widget:updated", {
@@ -316,122 +403,6 @@ export const WidgetNode = memo(function WidgetNode({
     // Load drag-drop styles
     useDragDropStyles();
 
-    // Auto-sizing for widgets in edit mode
-    useEffect(() => {
-        // Only apply in edit mode and when auto-resize is enabled
-        if (!data.isEditMode || !autoResizeEnabledRef.current) return;
-
-        // Get widget element
-        const widgetElement = widgetRef.current;
-        if (!widgetElement) return;
-
-        // Clear any existing timeout
-        if (resizeTimeoutRef.current) {
-            clearTimeout(resizeTimeoutRef.current);
-        }
-
-        // Set a timeout to prevent excessive updates
-        resizeTimeoutRef.current = setTimeout(() => {
-            const now = Date.now();
-            const lastResizeTime = widgetElement.getAttribute(
-                "data-last-resize-time"
-            );
-
-            // Skip if resized recently
-            if (lastResizeTime && now - parseInt(lastResizeTime) < 500) {
-                return;
-            }
-
-            // Find all components
-            const allComponents = widgetElement.querySelectorAll(
-                "[data-component-id]"
-            );
-            if (allComponents.length === 0) return;
-
-            // Calculate bounds
-            let maxRight = 0;
-            let maxBottom = 0;
-            const widgetRect = widgetElement.getBoundingClientRect();
-
-            allComponents.forEach((comp) => {
-                const rect = comp.getBoundingClientRect();
-                const relBottom = rect.bottom - widgetRect.top;
-                const relRight = rect.right - widgetRect.left;
-
-                maxBottom = Math.max(maxBottom, relBottom);
-                maxRight = Math.max(maxRight, relRight);
-            });
-
-            // Add padding
-            const padding = 50;
-
-            // Get current dimensions
-            const currentWidth = data.size.width.value;
-            const currentHeight = data.size.height.value;
-
-            // Calculate new dimensions
-            const newWidth = Math.min(
-                Math.max(currentWidth, maxRight + padding),
-                1280
-            );
-            const newHeight = Math.min(
-                Math.max(currentHeight, maxBottom + padding),
-                1280
-            );
-
-            // Minimum threshold for updates to avoid micro adjustments
-            const widthDiff = Math.abs(
-                newWidth - prevDimensionsRef.current.width
-            );
-            const heightDiff = Math.abs(
-                newHeight - prevDimensionsRef.current.height
-            );
-
-            if (widthDiff > 10 || heightDiff > 10) {
-                // Update ref
-                prevDimensionsRef.current = {
-                    width: newWidth,
-                    height: newHeight,
-                };
-
-                // Update widget size
-                widgetStore.updateWidget(data.id, {
-                    size: {
-                        width: { value: newWidth, unit: "px" },
-                        height: { value: newHeight, unit: "px" },
-                    },
-                });
-
-                // Store timestamp
-                widgetElement.setAttribute(
-                    "data-last-resize-time",
-                    now.toString()
-                );
-
-                // Publish event
-                eventBus.publish("widget:updated", {
-                    widgetId: data.id,
-                    action: "resized",
-                });
-            }
-        }, 300);
-
-        // Cleanup
-        return () => {
-            if (resizeTimeoutRef.current) {
-                clearTimeout(resizeTimeoutRef.current);
-            }
-        };
-    }, [
-        data.isEditMode,
-        data.id,
-        data.size.width.value,
-        data.size.height.value,
-        forceRender,
-        rootComponents.length,
-        widgetStore,
-    ]);
-
     // Set active widget when selected
     useEffect(() => {
         if (selected && data.id && selection.selectedWidgetId !== data.id) {
@@ -537,15 +508,29 @@ export const WidgetNode = memo(function WidgetNode({
                 ref={widgetRef}
                 className={widgetClassNames}
                 style={{
-                    width: data.size.width.value,
+                    width: tempSize ? tempSize.width : data.size.width.value,
                     height: data.size.height.value,
                     minWidth: 300,
                     minHeight: 100,
+                    position: "relative",
                 }}
                 data-widget-id={data.id}
                 data-edit-mode={data.isEditMode ? "true" : "false"}
                 data-selected={selected ? "true" : "false"}
             >
+                {/* Border Node Resizer - only visible in edit mode */}
+                {data.isEditMode && (
+                    <BorderNodeResizer
+                        nodeId={data.id}
+                        minWidth={300}
+                        minHeight={100}
+                        preserveHeight={true}
+                        onResizeStart={handleResizeStart}
+                        onResizeChange={handleResizeChange}
+                        onResizeComplete={handleResizeComplete}
+                    />
+                )}
+
                 {/* Widget header */}
                 <div className="flex justify-between items-center mb-0.25 drag-handle__widget">
                     <div className="text-xs text-font-dark-muted truncate max-w-[70%]">

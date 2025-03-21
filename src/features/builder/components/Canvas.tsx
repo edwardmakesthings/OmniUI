@@ -32,7 +32,7 @@ import {
 import WidgetNode from "./WidgetNode";
 import { PositionUtils } from "@/core/types/Geometry";
 import { EntityId } from "@/core/types/EntityTypes";
-import { eventBus, EventType } from "@/core/eventBus/eventBus";
+import { eventBus } from "@/core/eventBus/eventBus";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import { builderService } from "@/services/builderService";
 
@@ -432,6 +432,7 @@ export const Canvas = memo(function Canvas() {
                     nodesDraggable={true}
                     elementsSelectable={true}
                     selectNodesOnDrag={false}
+                    colorMode="dark"
                 >
                     {/* Background grid */}
                     <Background
@@ -446,7 +447,7 @@ export const Canvas = memo(function Canvas() {
                     />
 
                     {/* Canvas controls */}
-                    <Controls />
+                    <Controls position="bottom-right" />
 
                     {/* Info panel */}
                     <Panel

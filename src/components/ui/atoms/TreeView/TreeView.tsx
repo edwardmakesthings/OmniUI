@@ -35,7 +35,10 @@ export interface TreeViewProps
 
     // Extended behaviors
     getDragData?: (item: TreeItemData) => any;
-    getDropData?: (item: TreeItemData) => any;
+    getDropData?: (
+        item: TreeItemData,
+        draggedItem?: TreeItemData | null
+    ) => any;
 
     // Configuration
     multiSelect?: boolean;
@@ -87,6 +90,9 @@ export const TreeView = ({
     const [internalExpandedIds, setInternalExpandedIds] = useState<Set<string>>(
         new Set(defaultExpandedIds)
     );
+
+    // This state tracks the currently dragged item
+    const [draggedItem, setDraggedItem] = useState<TreeItemData | null>(null);
 
     // Use controlled if provided, otherwise use internal
     const selectedIdsSet = useMemo(
@@ -154,6 +160,66 @@ export const TreeView = ({
             onSelectionChange,
             onExpansionChange,
         ]
+    );
+
+    const findTreeItemById = useCallback(
+        (id: string): TreeItemData | null => {
+            const search = (items: TreeItemData[]): TreeItemData | null => {
+                for (const item of items) {
+                    if (item.id === id) {
+                        return item;
+                    }
+                    if (item.children?.length) {
+                        const found = search(item.children);
+                        if (found) return found;
+                    }
+                }
+                return null;
+            };
+
+            return search(items);
+        },
+        [items]
+    );
+
+    // Enhanced drag start handler
+    const handleDragStart = useCallback(
+        (draggedId: string, data?: any) => {
+            // Find the dragged item to track it
+            const item = findTreeItemById(draggedId);
+            setDraggedItem(item);
+
+            // Call the original callback
+            if (onDragStart) {
+                onDragStart(draggedId, data);
+            }
+        },
+        [findTreeItemById, onDragStart]
+    );
+
+    // Enhanced drag end handler
+    const handleDragEnd = useCallback(
+        (data?: any) => {
+            // Clear the dragged item when drag ends
+            setDraggedItem(null);
+
+            // Call the original callback
+            if (onDragEnd) {
+                onDragEnd(data);
+            }
+        },
+        [onDragEnd]
+    );
+
+    // Enhanced getDropData wrapper
+    const enhancedGetDropData = useCallback(
+        (item: TreeItemData): any => {
+            if (getDropData) {
+                return getDropData(item, draggedItem);
+            }
+            return null;
+        },
+        [getDropData, draggedItem]
     );
 
     // Function to handle movement of items
@@ -339,11 +405,11 @@ export const TreeView = ({
                         level={0}
                         selectionManager={selectionManager}
                         onMove={handleMove}
-                        onDragStart={onDragStart}
+                        onDragStart={handleDragStart}
                         onDragOver={onDragOver}
-                        onDragEnd={onDragEnd}
+                        onDragEnd={handleDragEnd}
                         getDragData={getDragData}
-                        getDropData={getDropData}
+                        getDropData={enhancedGetDropData}
                         className={`tree-item-${item.id.replace(
                             /[^a-zA-Z0-9-_]/g,
                             "-"
@@ -352,7 +418,7 @@ export const TreeView = ({
                             variant: "default",
                             elements: {
                                 root: {
-                                    base: "data-tree-item-id=" + item.id,
+                                    base: `data-tree-item-id=${item.id}`,
                                 },
                             },
                         }}

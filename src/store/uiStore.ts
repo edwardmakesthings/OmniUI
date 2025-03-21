@@ -4,7 +4,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { PanelPositionValues, UIState } from '@/core/types/UI';
+import { PanelConfig, PanelPositionValues, UIState } from '@/core/types/UI';
 import { createEntityId, EntityId } from '@/core/types/EntityTypes';
 import { StoreError, StoreErrorCodes } from '@/core/base/StoreError';
 import { MeasurementUtils } from '@/core/types/Measurement';
@@ -156,6 +156,7 @@ export interface UIStoreState extends UIState, SelectionState {
     // Panel management
     togglePanel: (panelId: EntityId) => void;
     getPanelConfig: (panelId: EntityId) => UIState['panelStates'][EntityId];
+    updatePanelConfig: (panelId: EntityId, config: Partial<PanelConfig>) => void;
 
     // Grid settings
     updateGridSettings: (settings: Partial<UIState['gridSettings']>) => void;
@@ -262,6 +263,40 @@ export const useUIStore = create<UIStoreState>()(
                         }
                     }
                 }));
+            },
+
+            /**
+             * Update the configuration of a panel
+             * @param {EntityId} panelId - ID of the panel to update
+             * @param {Partial<PanelConfig>} config - Partial panel configuration to apply
+             * @throws {StoreError} If the panel ID is not valid
+             */
+            updatePanelConfig: (panelId, config) => {
+                const state = get();
+                const panelConfig = state.panelStates[panelId];
+
+                if (!panelConfig) {
+                    throw new StoreError(
+                        'Invalid panel ID provided',
+                        StoreErrorCodes.INVALID_PANEL_ID
+                    );
+                }
+
+                set((state) => ({
+                    panelStates: {
+                        ...state.panelStates,
+                        [panelId]: {
+                            ...panelConfig,
+                            ...config
+                        }
+                    }
+                }));
+
+                // Notify about panel config change
+                eventBus.publish("ui:panel:updated", {
+                    panelId,
+                    config
+                });
             },
 
             /**
@@ -534,6 +569,18 @@ export function usePanelVisibility(panelName: PanelName) {
         isVisible,
         toggle: () => togglePanel(panelId)
     };
+}
+
+/**
+ * Helper hook for updating panel configuration by name
+ * @param panelName The name of the panel to update
+ * @returns Function to update panel configuration
+ */
+export function usePanelConfigUpdater(panelName: PanelName) {
+    const panelId = PANEL_IDS[panelName];
+    const updateConfig = useUIStore((state) => state.updatePanelConfig);
+
+    return (config: Partial<PanelConfig>) => updateConfig(panelId, config);
 }
 
 /**

@@ -265,7 +265,8 @@ export function createBuilderService(dependencies: BuilderDependencies) {
         },
 
         /**
-         * Delete a component from a widget
+         * Delete a component from a widget with improved instance cleanup
+         *
          * @param widgetId Widget containing the component
          * @param componentId Component to delete
          * @returns True if deleted successfully
@@ -274,94 +275,134 @@ export function createBuilderService(dependencies: BuilderDependencies) {
             try {
                 // Find the component to get its instance ID and parent
                 const widgetStoreState = widgetStore.getState();
-                const component = widgetStore.getState().findComponent(widgetId, componentId);
-                if (!component) return false;
+                const componentStoreState = componentStore.getState();
 
-                // Keep track of the parent to update its childIds afterwards
+                // Validate the widget exists
+                const widget = widgetStoreState.getWidget(widgetId);
+                if (!widget) {
+                    console.error(`Widget ${widgetId} not found, cannot delete component`);
+                    return false;
+                }
+
+                // Find the component with error handling
+                const component = widget.components.find(c => c.id === componentId);
+                if (!component) {
+                    // console.warn(`Component ${componentId} not found in widget ${widgetId}, may have been already deleted`);
+
+                    // Special case: Check if this was just a mistake in the component ID format
+                    // Sometimes IDs get mangled in the UI
+                    const potentialMatch = widget.components.find(c =>
+                        c.id.toLowerCase().includes(componentId.toLowerCase()) ||
+                        (componentId.includes('-') && c.id.includes(componentId.split('-')[1]))
+                    );
+
+                    if (potentialMatch) {
+                        console.log(`Found potential match for ${componentId}: ${potentialMatch.id}`);
+                        return this.deleteComponent(widgetId, potentialMatch.id);
+                    }
+
+                    return false;
+                }
+
+                // Keep track of the parent for hierarchy updates
                 const parentId = component.parentId;
 
-                // Get all descendants of this component (if any)
-                const getDescendantComponents = (parentId: EntityId): EntityId[] => {
-                    const widget = widgetStoreState.getWidget(widgetId);
-                    if (!widget) return [];
+                // Get all descendants of this component
+                const findAllDescendants = (parentId: EntityId): EntityId[] => {
+                    const descendants: EntityId[] = [];
 
-                    const descendantIds: EntityId[] = [];
+                    // Find direct children
+                    const directChildren = widget.components
+                        .filter(c => c.parentId === parentId)
+                        .map(c => c.id);
 
-                    // Helper function to recursively collect descendants
-                    const collectDescendants = (compId: EntityId) => {
-                        const children = widget.components.filter(c => c.parentId === compId);
+                    descendants.push(...directChildren);
 
-                        children.forEach(child => {
-                            descendantIds.push(child.id);
-                            collectDescendants(child.id);
-                        });
-                    };
+                    // Recursively find grandchildren
+                    directChildren.forEach(childId => {
+                        descendants.push(...findAllDescendants(childId));
+                    });
 
-                    // Start collecting from the initial parent
-                    collectDescendants(parentId);
-                    return descendantIds;
+                    return descendants;
                 };
 
-                // Get all child components recursively
-                const descendantIds = getDescendantComponents(componentId);
-                const selectedComponentId = uiStore.getState().selectedComponentId;
+                // Get all components to be deleted (the main component + all descendants)
+                const descendantIds = findAllDescendants(componentId);
+                const allComponentIds = [componentId, ...descendantIds];
 
-                // First, deselect any of these components if they're selected
-                if (selectedComponentId === componentId ||
-                    selectedComponentId && descendantIds.includes(selectedComponentId)) {
+                console.log(`Deleting component ${componentId} with ${descendantIds.length} descendants`);
+
+                // Check if any of these are currently selected
+                const selectedComponentId = uiStore.getState().selectedComponentId;
+                if (selectedComponentId && allComponentIds.includes(selectedComponentId)) {
                     uiStore.getState().deselectAll();
                 }
 
-                // Keep track of all instance IDs that need to be deleted
+                // Track all instance IDs that need to be cleaned up
                 const instancesToDelete: EntityId[] = [];
 
-                // Track the component's instance ID
-                if (component.instanceId) {
-                    instancesToDelete.push(component.instanceId);
-                }
-
-                // Track all descendant component instance IDs
-                descendantIds.forEach(descId => {
-                    const descendantComp = widgetStoreState.findComponent(widgetId, descId);
-                    if (descendantComp && descendantComp.instanceId) {
-                        instancesToDelete.push(descendantComp.instanceId);
+                // Collect instance IDs from the target component and all its descendants
+                allComponentIds.forEach(id => {
+                    const comp = widget.components.find(c => c.id === id);
+                    if (comp && comp.instanceId) {
+                        instancesToDelete.push(comp.instanceId);
                     }
                 });
 
-                // First, remove the component and all its descendants from the widget
-                widgetStore.getState().removeComponent(widgetId, componentId);
+                console.log(`Found ${instancesToDelete.length} instances to clean up`);
 
-                // Then remove all descendants one by one
-                descendantIds.forEach(descId => {
-                    widgetStore.getState().removeComponent(widgetId, descId);
+                // First, remove the components from the widget
+                // Using the built-in removeComponent method which handles hierarchy
+                widgetStoreState.removeComponent(widgetId, componentId, {
+                    removeChildren: true
                 });
 
-                // Finally, clean up all component instances
-                try {
-                    instancesToDelete.forEach(instanceId => {
-                        try {
-                            componentStore.getState().deleteInstance(instanceId);
-                        } catch (err) {
-                            // Log but continue even if instance deletion fails
-                            console.warn(`Could not delete component instance ${instanceId}:`, err);
-                        }
-                    });
-                } catch (error) {
-                    console.warn("Error during instance cleanup:", error);
-                    // Continue even if instance deletion fails
-                }
+                // Now clean up component instances one by one, with error handling
+                let instancesDeleted = 0;
+                let instanceErrors = 0;
 
-                // Notify about deletion
+                instancesToDelete.forEach(instanceId => {
+                    try {
+                        // First validate the instance exists to avoid noisy errors
+                        try {
+                            componentStoreState.getInstance(instanceId);
+                            componentStoreState.deleteInstance(instanceId);
+                            instancesDeleted++;
+                        } catch (e) {
+                            // Instance already gone or never existed, just log it
+                            console.info(`Instance ${instanceId} already removed or doesn't exist`);
+                            instanceErrors++;
+                        }
+                    } catch (err) {
+                        // Don't let instance deletion failures stop the process
+                        console.warn(`Failed to delete instance ${instanceId}:`, err);
+                        instanceErrors++;
+                    }
+                });
+
+                console.log(`Deleted ${instancesDeleted} instances, encountered ${instanceErrors} errors`);
+
+                // Publish detailed deletion event
                 eventBus.publish("component:deleted", {
                     componentId,
                     widgetId,
                     parentId,
-                    childrenDeleted: descendantIds.length
+                    childrenDeleted: descendantIds.length,
+                    instancesDeleted,
+                    instanceErrors,
+                    timestamp: Date.now()
+                });
+
+                // Force a hierarchy update
+                eventBus.publish("hierarchy:changed", {
+                    widgetId,
+                    action: "component-deleted",
+                    timestamp: Date.now()
                 });
 
                 return true;
             } catch (error) {
-                console.error("Failed to delete component:", error);
+                console.error(`Failed to delete component ${componentId}:`, error);
                 return false;
             }
         },

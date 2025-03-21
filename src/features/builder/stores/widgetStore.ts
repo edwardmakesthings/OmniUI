@@ -12,7 +12,7 @@ import { persist } from "zustand/middleware";
 import { useEffect } from "react";
 import { PanelIcon, WidgetIcon } from "@/components/ui";
 import { UnitType } from "@/core/types/Measurement";
-import { componentIconMap } from "@/registry/componentRenderers";
+import { layoutComponentIconMap as componentIconMap } from "@/registry/componentRenderers";
 import eventBus from "@/core/eventBus/eventBus";
 
 // Widget display types
@@ -82,6 +82,11 @@ export interface HierarchyNode {
     children: HierarchyNode[];
 };
 
+export interface ComponentDeleteOptions {
+    removeChildren?: boolean; // Whether to also remove child components
+    promoteChildren?: boolean;  // Whether to promote children to the parent's level
+};
+
 // ReactFlow node type with Widget data
 export type FlowWidgetNode = Node<Widget>;
 
@@ -112,7 +117,7 @@ export interface WidgetStore {
         componentId: EntityId,
         updates: Partial<WidgetComponent>
     ) => void;
-    removeComponent: (widgetId: EntityId, componentId: EntityId) => void;
+    removeComponent: (widgetId: EntityId, componentId: EntityId, options: ComponentDeleteOptions) => void;
 
     // Navigation/action operations
     bindComponentToWidget: (
@@ -489,18 +494,15 @@ export const useWidgetStore = create<WidgetStore>()(
             },
 
             /**
- * Remove a component from a widget
- * @param widgetId ID of the widget containing the component
- * @param componentId ID of the component to remove
- * @param options Options for removal behavior
- */
+             * Remove a component from a widget
+             * @param widgetId ID of the widget containing the component
+             * @param componentId ID of the component to remove
+             * @param options Options for removal behavior
+             */
             removeComponent: (
                 widgetId: EntityId,
                 componentId: EntityId,
-                options: {
-                    removeChildren?: boolean, // Whether to also remove child components
-                    promoteChildren?: boolean  // Whether to promote children to the parent's level
-                } = { removeChildren: true, promoteChildren: false }
+                options: ComponentDeleteOptions = { removeChildren: true, promoteChildren: false }
             ) => {
                 const { removeChildren = true, promoteChildren = false } = options;
 
@@ -1123,7 +1125,8 @@ export const useWidgetStore = create<WidgetStore>()(
                             }
                         }
 
-                        // All retries failed or getInstance explicitly failed
+                        // After retries are exhausted, log the last error
+                        console.error(`Failed to load component store after ${maxRetries} attempts:`, lastError);
                         console.warn(`Creating placeholder for instance ${instanceId}`);
 
                         // Create a placeholder instance

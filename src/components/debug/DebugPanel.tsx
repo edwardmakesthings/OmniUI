@@ -105,7 +105,7 @@ const DebugPanel: React.FC = () => {
         <>
             {/* Small button always visible in corner */}
             <button
-                className="fixed z-50 bottom-2 right-2 bg-red-600 text-white p-2 rounded-full w-10 h-10 flex items-center justify-center shadow-lg"
+                className="fixed z-50 bottom-2 right-15 bg-red-600 text-white p-2 rounded-full w-10 h-10 flex items-center justify-center shadow-lg"
                 onClick={togglePanel}
                 title="Debug Panel"
             >
@@ -114,7 +114,7 @@ const DebugPanel: React.FC = () => {
 
             {/* Expanded panel when open */}
             {isOpen && (
-                <div className="fixed z-50 bottom-16 right-4 bg-gray-900 text-white p-4 pt-3 rounded-lg shadow-lg w-80">
+                <div className="fixed z-50 bottom-16 right-15 bg-bg-dark-darker text-white p-4 pt-3 rounded-lg shadow-lg w-80">
                     <h3 className="text-lg font-bold mb-1">Debug Panel</h3>
 
                     <div className="mb-2">

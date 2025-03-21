@@ -1,0 +1,75 @@
+/**
+ * CSS styles for border-style node resizing
+ *
+ * @path src/lib/styles/borderResize.css
+ */
+
+/* Override default ReactFlow resize control styles */
+.border-node-resize-control {
+    position: absolute;
+    z-index: 10;
+    border-radius: 0;
+    background-color: transparent;
+    opacity: 0; /* Start fully transparent */
+    transition: opacity 0.2s ease;
+}
+
+/* Show on hover over the widget */
+.react-flow__node:hover .border-node-resize-control {
+    opacity: 0.3;
+}
+
+/* Further increase opacity on hover over the handle itself */
+.border-node-resize-control:hover,
+.border-node-resize-control.resizing {
+    opacity: 0.8 !important;
+}
+
+/* Left resize handle */
+.border-node-resize-control.left {
+    left: -5px !important;
+    top: 0 !important;
+    width: 4px !important;
+    height: 100% !important;
+    cursor: ew-resize !important;
+    transform: translateY(0%);
+}
+
+/* Right resize handle */
+.border-node-resize-control.right {
+    right: -5px !important;
+    top: 0 !important;
+    width: 4px !important;
+    height: 100% !important;
+    cursor: ew-resize !important;
+    transform: translateY(0%);
+}
+
+/* Visible indicator for the resize handles */
+.border-node-resize-control::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--accent-dark-bright, #4a90e2);
+}
+
+/* Ensure our node retains its styling during resize */
+.react-flow__node.resizing {
+    z-index: 1000;
+}
+
+/* Container styles while resizing */
+.resizing-container {
+    -webkit-user-select: none;
+    user-select: none;
+    position: relative;
+}
+
+body.resizing {
+    cursor: grabbing;
+    -webkit-user-select: none;
+    user-select: none;
+}

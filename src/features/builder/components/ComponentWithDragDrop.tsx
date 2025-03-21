@@ -22,7 +22,6 @@ import useDragDropStyles from "@/hooks/useDragDropStyles";
 
 // import DeleteButton from "@/features/builder/components/WidgetActionButtons/DeleteButton";
 import { useComponentSelection } from "@/hooks/useComponentSelection";
-import eventBus from "@/core/eventBus/eventBus";
 import { useEventSubscription } from "@/hooks/useEventBus";
 import useComponentStyling from "@/hooks/useComponentStyling";
 import { ComponentInstance } from "@/core";

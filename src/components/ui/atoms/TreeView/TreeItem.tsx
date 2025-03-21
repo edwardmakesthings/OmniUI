@@ -38,7 +38,10 @@ export interface TreeItemProps
 
     // Extended behaviors
     getDragData?: (item: TreeItemData) => any;
-    getDropData?: (item: TreeItemData) => any;
+    getDropData?: (
+        item: TreeItemData,
+        draggedItem?: TreeItemData | null
+    ) => any;
 
     // Style customization
     className?: string;
@@ -139,18 +142,58 @@ export const TreeItem = memo(
             console.log("TreeItem onDrop:", {
                 draggedId: dragData.id,
                 target,
-                item: item, // Log the current item
+                item: item,
             });
 
-            const dropData = getDropData ? getDropData(item) : null;
+            // Find the currently dragged item if possible
+            let draggedItem: TreeItemData | null = null;
+
+            // If we have dragData with an id, try to find the corresponding item
+            if (dragData && dragData.id) {
+                // This is a simplified approach - in a real implementation, you'd need
+                // to have access to the full tree structure to find the item
+                // But we can use basic rules to prevent self-drops
+                if (dragData.id === item.id) {
+                    console.warn("Cannot drop an item onto itself");
+                    return; // Prevent self-drops
+                }
+
+                // Check for circular reference (if we're dropping a parent onto its child)
+                // This is a basic check - a full implementation would need to traverse the tree
+                if (item.parentId && dragData.id === item.parentId) {
+                    console.warn("Cannot create circular reference");
+                    return;
+                }
+
+                // If we had access to the full item being dragged, we'd set draggedItem here
+                draggedItem = {
+                    id: dragData.id,
+                    label: "Unknown", // We don't have the label
+                    ...dragData.data,
+                } as TreeItemData;
+            }
+
+            // Now pass both items to getDropData
+            const dropData = getDropData
+                ? getDropData(item, draggedItem)
+                : null;
+
+            // If dropData returns { canAcceptDrop: false }, prevent the drop
+            if (dropData && dropData.canAcceptDrop === false) {
+                console.warn(
+                    `Drop prevented: ${
+                        dropData.reason || "Invalid drop target"
+                    }`
+                );
+                return;
+            }
 
             // Call the drag over callback if provided
             if (onDragOver) {
                 onDragOver(item.id, { ...dropData, target });
             }
 
-            // Call the original handler with a well-structured drop target
-            // that includes both the target ID and position
+            // Call the original handler with the drop target
             onMove?.(dragData.id, {
                 id: item.id,
                 position: target.position || "inside",

@@ -96,7 +96,7 @@ export function useEventDebug() {
  * Enhanced version of useEventSubscription that tracks subscriptions
  * Drop-in replacement for existing useEventSubscription
  */
-export function useTrackedEventSubscription<T = any>(
+export function useTrackedEventSubscription(
     type: EventType,
     handler: (event: any) => void,
     deps: any[] = [],
