@@ -825,7 +825,7 @@ export function createBuilderService(dependencies: BuilderDependencies) {
          */
         rebuildComponentHierarchyFromTree: (treeData: any[]): OperationResult => {
             try {
-                console.log("Starting simplified rebuild from tree");
+                console.log("Starting hierarchy rebuild from tree data");
 
                 // Step 1: Collect all widgets and components that exist currently
                 const widgetStore = useWidgetStore.getState();
@@ -847,16 +847,22 @@ export function createBuilderService(dependencies: BuilderDependencies) {
 
                 // Collect all widgets in the tree
                 const widgetIds = new Set<EntityId>();
+
+                // First identify all widget nodes in the tree
+                // Widget nodes don't have a slash in their ID
                 for (const node of treeData) {
-                    if (!node.id || node.id.includes('/')) continue;
-                    widgetIds.add(node.id as EntityId);
+                    if (isWidgetNode(node)) {
+                        widgetIds.add(node.id as EntityId);
+                    }
                 }
 
-                // Get all widgets and their components
+                console.log(`Found ${widgetIds.size} widget nodes in tree data`);
+
+                // Get all widgets and their components from the store
                 for (const widgetId of widgetIds) {
                     const widget = widgetStore.getWidget(widgetId);
                     if (!widget) {
-                        console.warn(`Widget ${widgetId} not found`);
+                        console.warn(`Widget ${widgetId} not found in store`);
                         continue;
                     }
 
@@ -1043,7 +1049,7 @@ export function createBuilderService(dependencies: BuilderDependencies) {
                     }
                 };
             } catch (error) {
-                console.error("Error rebuilding component hierarchy from tree:", error);
+                console.error("Error rebuilding hierarchy from tree:", error);
                 return { success: false, error: error as Error };
             }
         },
@@ -1175,6 +1181,23 @@ export function createBuilderService(dependencies: BuilderDependencies) {
             };
         }
     }
+};
+
+/**
+ * Detects if a tree node represents a widget
+ * @param node The tree node to check
+ * @returns True if the node is a widget node
+ */
+export const isWidgetNode = (node: any): boolean => {
+    // Widget nodes don't have a slash in their ID
+    if (!node.id || node.id.includes('/')) return false;
+
+    // Also check for explicit widget type markers
+    return (
+        node.type === 'Widget' ||
+        node.data?.type === 'Widget' ||
+        node.data?.isWidget === true
+    );
 };
 
 /**

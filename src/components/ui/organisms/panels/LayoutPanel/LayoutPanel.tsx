@@ -26,6 +26,42 @@ import eventBus from "@/core/eventBus/eventBus";
 import { IconProps } from "@/lib/icons/types";
 import { cn } from "@/lib/utils";
 
+// This ensures widget nodes have all necessary properties for drop handling
+const prepareTreeData = (rawData: any[]): TreeItemData[] => {
+    if (!rawData || !rawData.length) return [];
+
+    // Process each node in the tree
+    const processNode = (node: any): TreeItemData => {
+        // Check if this is a widget node (doesn't have a slash in the ID)
+        const isWidget = !node.id.includes("/");
+
+        // Create processed node with enhanced properties
+        const processedNode: TreeItemData = {
+            ...node,
+            // CRITICAL: Explicitly set canDrop to true for widgets
+            // This ensures the TreeItem component will include "inside" in dropPositions
+            canDrop: isWidget ? true : node.canDrop,
+            // Also set type to "Widget" for explicit type checking
+            type: isWidget ? "Widget" : node.type,
+            // Process children recursively
+            children: node.children?.map(processNode) || [],
+            // Enhanced data object
+            data: {
+                ...(node.data || {}),
+                isWidget,
+                type: isWidget ? "Widget" : node.type,
+                // Force "inside" as the only valid drop position for widgets
+                forcedDropPosition: isWidget ? "inside" : undefined,
+            },
+        };
+
+        return processedNode;
+    };
+
+    // Process all top-level nodes
+    return rawData.map(processNode);
+};
+
 const LayoutPanel = () => {
     // Config and stores
     const layoutHierarchyConfig = usePanelConfig("LAYOUT_HIERARCHY");
@@ -206,27 +242,20 @@ const LayoutPanel = () => {
      */
     const getDragData = useCallback((item: TreeItemData) => {
         // Check if this is a widget node (id will be just the widget ID without a slash)
-        if (!item.id.includes("/")) {
-            return {
-                widgetId: item.id,
-                isWidget: true,
-                canDrag: false, // Widgets shouldn't be draggable
-                canDrop: true,
-                label: item.label,
-                ...item.data,
-            };
-        }
+        const isWidget = !item.id.includes("/");
 
-        // This is a component node (format: widgetId/componentId)
-        const [widgetId, componentId] = item.id.split("/");
-        return {
-            widgetId,
-            componentId,
-            isComponent: true,
+        // Create the base response
+        const result = {
+            widgetId: isWidget ? item.id : item.id.split("/")[0],
+            isWidget,
+            canDrag: isWidget ? false : item.canDrag !== false,
+            canDrop: isWidget ? true : item.canDrop !== false, // Explicitly set canDrop for widgets
             label: item.label,
-            type: item.type,
+            type: isWidget ? "Widget" : item.type,
             ...item.data,
         };
+
+        return result;
     }, []);
 
     /**
@@ -238,27 +267,20 @@ const LayoutPanel = () => {
             // Check if this is a widget node (id will be just the widget ID without a slash)
             const isWidget = !item.id.includes("/");
 
-            // Create base result object
-            const result = {
-                canAcceptDrop: true,
-                id: item.id,
-                isWidget,
-                isComponent: !isWidget,
-                label: item.label,
-                ...item.data,
-            };
-
-            // Add more detailed info if it's a widget
+            // For widgets, always return a positive drop result
             if (isWidget) {
                 const widget = useWidgetStore
                     .getState()
                     .getWidget(item.id as EntityId);
                 if (widget) {
-                    // Add widget-specific info
                     return {
-                        ...result,
+                        canAcceptDrop: true,
+                        canDrop: true, // Critical for TreeItem's drop position logic
+                        id: item.id,
+                        isWidget: true,
+                        isComponent: false,
+                        label: item.label || widget.label || "Widget",
                         isEmpty: widget.components.length === 0,
-                        canAcceptDrop: true, // Widgets can always accept drops
                         forcedDropPosition: "inside" as const, // Always drop inside widgets
                         dropClassName: cn(
                             "widget-drop-target",
@@ -266,11 +288,12 @@ const LayoutPanel = () => {
                                 "empty-widget-drop-zone"
                         ),
                         widgetLabel: widget.label || "Widget",
+                        type: "Widget", // Explicitly set type to identify it as a widget
                     };
                 }
             }
 
-            // If not a widget, it's a component - check if it can accept children
+            // For components, check if it can accept children
             const canAcceptChildren =
                 item.canDrop !== false &&
                 (item.type === "Panel" ||
@@ -280,21 +303,30 @@ const LayoutPanel = () => {
                     item.type === "DropdownPanel" ||
                     item.type === "Tabs");
 
-            // Prevent dropping if this isn't a container component
+            // Handle component drop validation
             if (!isWidget && !canAcceptChildren) {
                 return {
-                    ...result,
                     canAcceptDrop: false,
+                    canDrop: false,
+                    id: item.id,
+                    isWidget: false,
+                    isComponent: true,
+                    label: item.label,
                     reason: "This component cannot contain other components",
+                    ...item.data,
                 };
             }
 
             // Prevent self-drop
             if (draggedItem && item.id === draggedItem.id) {
                 return {
-                    ...result,
                     canAcceptDrop: false,
+                    id: item.id,
+                    isWidget: isWidget,
+                    isComponent: !isWidget,
+                    label: item.label,
                     reason: "Cannot drop onto itself",
+                    ...item.data,
                 };
             }
 
@@ -305,13 +337,26 @@ const LayoutPanel = () => {
                 isCircularDrop(draggedItem.id, item.id)
             ) {
                 return {
-                    ...result,
                     canAcceptDrop: false,
+                    id: item.id,
+                    isWidget: isWidget,
+                    isComponent: !isWidget,
+                    label: item.label,
                     reason: "Cannot create circular structure",
+                    ...item.data,
                 };
             }
 
-            return result;
+            // Return positive result with appropriate flags
+            return {
+                canAcceptDrop: true,
+                canDrop: true, // Explicitly set for TreeItem logic
+                id: item.id,
+                isWidget: isWidget,
+                isComponent: !isWidget,
+                label: item.label,
+                ...item.data,
+            };
         },
         [useWidgetStore]
     );
@@ -808,11 +853,13 @@ const LayoutPanel = () => {
                     return {
                         ...node,
                         canDrop: true, // Always allow drops onto widgets
+                        type: "Widget",
                         data: {
                             ...node.data,
                             isWidget: true,
                             isEmpty:
                                 !node.children || node.children.length === 0,
+                            type: "Widget",
                         },
                         className: "widget-tree-node",
                         dropClassName: "widget-drop-target",
@@ -829,16 +876,22 @@ const LayoutPanel = () => {
             icon: SafeWidgetIcon,
             canDrop: true, // Widgets can always accept drops
             canDrag: false, // Widgets themselves shouldn't be draggable
+            type: "Widget",
             className: "widget-tree-node",
             dropClassName: "widget-drop-target",
             data: {
                 isWidget: true,
                 isEmpty: widget.components.length === 0,
                 widgetId: widget.id,
+                type: "Widget",
             },
             children: [],
         }));
     }, [widgets, forceRender, SafeWidgetIcon]);
+
+    const enhancedTreeData = useMemo(() => {
+        return prepareTreeData(treeData);
+    }, [treeData]);
 
     // Add these style rules to your component or global CSS
     const treeStyles = `
@@ -871,6 +924,33 @@ const LayoutPanel = () => {
     bottom: 0;
     width: 2px;
     background-color: rgba(34, 197, 94, 0.5);
+}
+`;
+
+    const customTreeStyles = `
+${treeStyles}
+
+/* Force enable inside drop target for widgets */
+.tree-item[data-is-widget="true"] {
+  position: relative;
+}
+
+.tree-item[data-is-widget="true"][data-drop-target="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgba(59, 130, 246, 0.2);
+  border: 1px dashed #3b82f6;
+  pointer-events: none;
+}
+
+/* Add data attributes to widget nodes for easier styling */
+.widget-tree-node {
+  font-weight: 600;
+  padding: 4px;
+  border-radius: 4px;
+  background-color: rgba(59, 130, 246, 0.05);
+  border-left: 2px solid rgba(59, 130, 246, 0.5);
 }
 `;
 
@@ -915,11 +995,11 @@ const LayoutPanel = () => {
                     )}
 
                     <TreeView
-                        items={treeData}
+                        items={enhancedTreeData}
                         selectedIds={selectedTreeItem ? [selectedTreeItem] : []}
                         expandedIds={expandedIds}
                         maxHeight="calc(100vh - 70px)"
-                        className={"overflow-y-auto " + treeStyles}
+                        className={"overflow-y-auto " + customTreeStyles}
                         onSelectionChange={handleSelectionChange}
                         onExpansionChange={setExpandedIds}
                         onMove={handleTreeMove}
